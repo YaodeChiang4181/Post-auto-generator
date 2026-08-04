@@ -29,5 +29,8 @@ def send_to_telegram(message):
         logger.info("Successfully sent to Telegram!")
         return True
     except requests.RequestException as e:
-        logger.error(f"Failed to send message to Telegram: {e}")
+        error_msg = f"Failed to send message to Telegram: {e}"
+        if hasattr(e, 'response') and e.response is not None:
+            error_msg += f" - Response: {e.response.text}"
+        logger.error(error_msg)
         return False
