@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+logs/*
+!logs/.gitkeep
+data/state.db
+data/state.db-journal

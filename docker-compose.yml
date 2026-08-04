@@ -1,0 +1,13 @@
+name: linkedin-content-bot
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: linkedin_content_bot
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: "no" # Since it's a script that runs and finishes, we don't want it to continuously restart. Use cron on host to trigger docker-compose up

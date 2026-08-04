@@ -1,0 +1,47 @@
+name: Daily LinkedIn Content Automation
+
+on:
+  schedule:
+    # 每天 UTC 時間 00:30 執行 (對應台灣時間 08:30)
+    - cron: '30 0 * * *'
+  workflow_dispatch: # 允許手動從 GitHub 網頁觸發
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🚀 Run automation script
+      env:
+        TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        python main.py
+
+    - name: 💾 Commit and Push SQLite State
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        # Check if database has changed
+        if git diff --quiet data/state.db; then
+          echo "No changes to state database."
+        else
+          git add data/state.db
+          git commit -m "chore: auto-update state database"
+          git push
+        fi
