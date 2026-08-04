@@ -4,5 +4,3 @@ __pycache__/
 .env
 logs/*
 !logs/.gitkeep
-data/state.db
-data/state.db-journal
