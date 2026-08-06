@@ -1,80 +1,91 @@
 import requests
+import concurrent.futures
+from datetime import datetime
 from config import TAVILY_API_KEY
 from logger import get_logger
 
 logger = get_logger(__name__)
 
-def fetch_company_news(company_name):
-    """
-    使用 Tavily API 抓取該公司最新商業新聞
-    """
+def _search_tavily(query, max_results=2, days=None):
+    """Helper function to call Tavily API"""
     if not TAVILY_API_KEY:
-        return "無最新新聞資料 (API Key 未設定)"
+        return "API Key 未設定"
 
     url = "https://api.tavily.com/search"
     payload = {
         "api_key": TAVILY_API_KEY,
-        "query": f"{company_name} 最新商業新聞 發展動態",
+        "query": query,
         "search_depth": "basic",
-        "max_results": 3
+        "max_results": max_results,
     }
-    
+    if days:
+        payload["days"] = days
+
     try:
         response = requests.post(url, json=payload, timeout=15)
         response.raise_for_status()
         results = response.json().get("results", [])
         
         if not results:
-            return "無相關新聞"
+            return ""
             
-        news_summaries = []
+        snippets = []
         for res in results:
-            title = res.get('title', '無標題')
-            content = res.get('content', '')
+            content = res.get('content', '').replace('\n', ' ').strip()
             url = res.get('url', '')
+            if len(content) > 150:
+                content = content[:150] + "..."
             
-            content_clean = content.replace('\n', ' ').strip()
-            # 放寬字數限制到 250 字
-            if len(content_clean) > 250:
-                content_clean = content_clean[:250] + "..."
-            
-            news_summaries.append(f"🔹 【{title}】\n   {content_clean}\n   🔗 連結：{url}")
-            
-        return "\n\n".join(news_summaries)
-    except Exception as e:
-        logger.error(f"Error fetching news for {company_name}: {e}")
-        return f"新聞抓取失敗"
-
-def fetch_company_story(company_name):
-    """
-    使用 Tavily API 抓取公司的商業模式或品牌故事
-    """
-    if not TAVILY_API_KEY:
-        return "無故事資料"
-
-    url = "https://api.tavily.com/search"
-    payload = {
-        "api_key": TAVILY_API_KEY,
-        "query": f"{company_name} 商業模式 品牌故事 發展歷史",
-        "search_depth": "basic",
-        "max_results": 1
-    }
-    
-    try:
-        response = requests.post(url, json=payload, timeout=15)
-        response.raise_for_status()
-        results = response.json().get("results", [])
+            snippet_text = f"- {content}"
+            if url:
+                snippet_text += f"\n  🔗 連結: {url}"
+            snippets.append(snippet_text)
         
-        if not results:
-            return "無相關故事"
-            
-        content = results[0].get('content', '')
-        url = results[0].get('url', '')
-        content_clean = content.replace('\n', ' ').strip()
-        if len(content_clean) > 300:
-            content_clean = content_clean[:300] + "..."
-            
-        return f"{content_clean}\n   🔗 來源連結：{url}"
+        return "\n".join(snippets)
     except Exception as e:
-        logger.error(f"Error fetching story for {company_name}: {e}")
-        return f"故事抓取失敗"
+        logger.error(f"Tavily search failed for '{query}': {e}")
+        return ""
+
+def fetch_all_metrics(company):
+    """
+    針對 8 大指標進行多維度的 Tavily 搜尋。
+    回傳一個 dict，包含所有指標的搜尋結果。
+    """
+    comp_name = company.get("name", "該公司")
+    today = datetime.now().strftime("%Y年%m月")
+    
+    # 建立 8 個維度的搜尋任務
+    queries = {
+        "scale": f"{comp_name} 2024 營收 市值 員工人數",
+        "influence": f"{comp_name} 台灣市占率 全球排名 主要客戶 合作夥伴",
+        "hidden_champ": f"{comp_name} 隱形冠軍 核心技術 專利 關鍵零組件 龍頭",
+        "founder": f"{comp_name} 董事長 創辦人 關鍵決策 轉型 理念",
+        "survival": f"{comp_name} 創業初期 挑戰 虧損 轉虧為盈 突破困境",
+        "moat": f"{comp_name} 規模經濟 進入障礙 客戶黏著度 品牌優勢",
+        "monopoly": f"{comp_name} 獨家供應 技術門檻 難以複製 供應鏈關鍵",
+        "crisis": f"{comp_name} 地緣政治 景氣循環 衝擊 危機 關稅 法規",
+        # 額外的最新新聞
+        "latest_news": f"{comp_name} {today} 最新新聞 發展動態"
+    }
+
+    results = {}
+    
+    # 使用 ThreadPool 平行搜尋以節省時間
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_key = {}
+        for key, query in queries.items():
+            # 最新新聞加上 days 限制 (例如過去 7 天)，其它則全域搜尋
+            days_limit = 7 if key == "latest_news" else None
+            future = executor.submit(_search_tavily, query, 2, days_limit)
+            future_to_key[future] = key
+
+        for future in concurrent.futures.as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                res = future.result()
+                results[key] = res if res else "[資料不足，需自主判斷]"
+            except Exception as exc:
+                logger.error(f"Search for {key} generated an exception: {exc}")
+                results[key] = "[搜尋失敗，需自主判斷]"
+
+    return results
