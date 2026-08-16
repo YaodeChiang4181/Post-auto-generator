@@ -2,8 +2,8 @@ name: Daily LinkedIn Content Automation
 
 on:
   schedule:
-    # 每天 UTC 時間 23:13 執行 (對應台灣時間 07:13，提早排程以避開 GitHub Actions 塞車延遲)
-    - cron: '13 23 * * *'
+    # 每天 UTC 時間 20:13 執行 (對應台灣時間 04:13，提早排程以避開 GitHub Actions 塞車延遲)
+    - cron: '13 20 * * *'
   workflow_dispatch: # 允許手動從 GitHub 網頁觸發
 
 jobs:
