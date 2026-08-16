@@ -54,18 +54,13 @@ def fetch_all_metrics(company):
     comp_name = company.get("name", "該公司")
     today = datetime.now().strftime("%Y年%m月")
     
-    # 建立 8 個維度的搜尋任務
+    # 建立搜尋任務
     queries = {
-        "scale": f"{comp_name} 2024 營收 市值 員工人數",
-        "influence": f"{comp_name} 台灣市占率 全球排名 主要客戶 合作夥伴",
-        "hidden_champ": f"{comp_name} 隱形冠軍 核心技術 專利 關鍵零組件 龍頭",
-        "founder": f"{comp_name} 董事長 創辦人 關鍵決策 轉型 理念",
-        "survival": f"{comp_name} 創業初期 挑戰 虧損 轉虧為盈 突破困境",
-        "moat": f"{comp_name} 規模經濟 進入障礙 客戶黏著度 品牌優勢",
-        "monopoly": f"{comp_name} 獨家供應 技術門檻 難以複製 供應鏈關鍵",
-        "crisis": f"{comp_name} 地緣政治 景氣循環 衝擊 危機 關稅 法規",
-        # 額外的最新新聞
-        "latest_news": f"{comp_name} {today} 最新新聞 發展動態"
+        "moat": f"{comp_name} 護城河 規模經濟 競爭優勢",
+        "story": f"{comp_name} 創業故事 背景 董事長創業故事 公司起源",
+        "products": f"{comp_name} 主要產品 服務 解決方案",
+        "fields": f"{comp_name} 深耕領域 核心事業 發展方向",
+        "challenges": f"{comp_name} 困境 未來挑戰 面臨風險"
     }
 
     results = {}
@@ -74,9 +69,7 @@ def fetch_all_metrics(company):
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         future_to_key = {}
         for key, query in queries.items():
-            # 最新新聞加上 days 限制 (例如過去 7 天)，其它則全域搜尋
-            days_limit = 7 if key == "latest_news" else None
-            future = executor.submit(_search_tavily, query, 2, days_limit)
+            future = executor.submit(_search_tavily, query, 2, None)
             future_to_key[future] = key
 
         for future in concurrent.futures.as_completed(future_to_key):
