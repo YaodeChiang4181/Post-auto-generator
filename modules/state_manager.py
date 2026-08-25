@@ -26,6 +26,14 @@ class StateManager:
                     last_posted_at TIMESTAMP
                 )
             ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS vocabulary_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP
+                )
+            ''')
             conn.commit()
 
     def _load_initial_data(self):
@@ -78,3 +86,40 @@ class StateManager:
             )
             conn.commit()
             logger.info(f"Marked {stock_id} as posted at {now}")
+
+    def get_recent_history(self, days=30):
+        """Fetch vocabularies and proverbs used in the last `days` days."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT type, content FROM vocabulary_history
+                WHERE created_at >= date('now', ?)
+            ''', (f'-{days} days',))
+            rows = cursor.fetchall()
+            
+            history = {"vocab": [], "proverb": []}
+            for row in rows:
+                if row[0] == 'vocab':
+                    history["vocab"].append(row[1])
+                elif row[0] == 'proverb':
+                    history["proverb"].append(row[1])
+                    
+            return history
+
+    def save_history(self, vocab, proverb):
+        """Save a new vocabulary and proverb to the history."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            if vocab:
+                cursor.execute(
+                    'INSERT INTO vocabulary_history (type, content, created_at) VALUES (?, ?, ?)',
+                    ('vocab', vocab, now)
+                )
+            if proverb:
+                cursor.execute(
+                    'INSERT INTO vocabulary_history (type, content, created_at) VALUES (?, ?, ?)',
+                    ('proverb', proverb, now)
+                )
+            conn.commit()
+            logger.info(f"Saved vocabulary '{vocab}' and proverb '{proverb}' to history.")

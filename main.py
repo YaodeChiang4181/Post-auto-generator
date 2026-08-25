@@ -5,10 +5,15 @@ from modules.news_api import fetch_all_metrics
 from modules.formatter import format_daily_report
 from modules.telegram_bot import send_to_telegram
 
+from modules.state_manager import StateManager
+
 logger = get_logger("main")
 
 def main():
     logger.info("=== Starting Content Automation (Targeted Search Mode) ===")
+    
+    # 0. Init StateManager
+    state_manager = StateManager()
     
     # 1. Get random company from government data
     company = get_random_company()
@@ -24,9 +29,11 @@ def main():
     logger.info("Fetching all 8 metric categories via search...")
     metrics = fetch_all_metrics(company)
     
-    # 3. Format Data (Without LLM, pure parsing)
-    logger.info("Formatting daily report...")
-    post_draft = format_daily_report(company, metrics)
+    # 3. Format Data (With LLM JSON output)
+    logger.info("Formatting daily report with Vocabulary and Proverb...")
+    recent_history = state_manager.get_recent_history(days=30)
+    post_draft, vocab_word, proverb_text = format_daily_report(company, metrics, recent_history)
+    
     if not post_draft:
         logger.error("Failed to format report. Exiting.")
         sys.exit(1)
@@ -35,9 +42,10 @@ def main():
     logger.info("Sending to Telegram...")
     success = send_to_telegram(post_draft)
     
-    # 5. Output result
+    # 5. Output result & Save History
     if success:
-        logger.info("Workflow completed successfully.")
+        state_manager.save_history(vocab_word, proverb_text)
+        logger.info("Workflow completed successfully. History saved.")
     else:
         logger.error("Workflow finished with errors (Telegram failed).")
         sys.exit(1)
