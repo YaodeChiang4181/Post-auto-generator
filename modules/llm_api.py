@@ -5,13 +5,27 @@ import os
 
 logger = get_logger(__name__)
 
-SYSTEM_PROMPT = """你是一位專業的資訊整理助理。請將以下定時抓取的原始資訊，整理成結構清楚、適合手機閱讀的繁體中文linkedin風格的文章。
+def get_system_prompt():
+    base_prompt = """你是一位專業的資訊整理助理。請將以下定時抓取的原始資訊，整理成結構清楚、適合手機閱讀的繁體中文linkedin風格的文章。
 
 排版原則：
 1. 給出清晰的核心標題
 2. 每個點條列式整理 2~4 個重點摘要
 3. 去除重複、雜訊或無意義字元
 4. 結尾附上幾個hashtag"""
+
+    template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '統整格式模板.md')
+    if os.path.exists(template_path):
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template_content = f.read().strip()
+            
+            if template_content:
+                base_prompt += f"\n\n以下是貼文的預期輸出格式參考 (請盡量依照此結構與風格生成文章)：\n\n=== 格式模板開始 ===\n{template_content}\n=== 格式模板結束 ==="
+        except Exception as e:
+            logger.error(f"讀取格式模板失敗: {e}")
+            
+    return base_prompt
 
 def summarize_with_llm(company_data, metrics):
     """
@@ -48,7 +62,7 @@ def summarize_with_llm(company_data, metrics):
             messages=[
                 {
                     "role": "system",
-                    "content": SYSTEM_PROMPT,
+                    "content": get_system_prompt(),
                 },
                 {
                     "role": "user",
