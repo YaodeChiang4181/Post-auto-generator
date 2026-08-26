@@ -1,29 +1,34 @@
-from groq import Groq
-from config import GROQ_API_KEY
+from google import genai
+from config import GEMINI_API_KEY
 from logger import get_logger
 import os
 import json
+from pydantic import BaseModel, Field
+
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = get_logger(__name__)
 
+# 定義 Gemini 結構化輸出的 Pydantic Schema
+class VocabularySchema(BaseModel):
+    word: str = Field(description="英文單字")
+    pos: str = Field(description="詞性 (例如: n., v., adj.)")
+    pronunciation: str = Field(description="音標")
+    example: str = Field(description="例句 (附中文翻譯)")
+
+class ProverbSchema(BaseModel):
+    text: str = Field(description="諺語 (英文或中文)")
+    explanation: str = Field(description="解釋與由來")
+    usage: str = Field(description="應用場景或如何與今日故事連結")
+
+class DailyReportSchema(BaseModel):
+    story: str = Field(description="你的商業故事主文 (包含標題、條列重點、hashtag)")
+    vocabulary: VocabularySchema = Field(description="今日商務單字")
+    proverb: ProverbSchema = Field(description="今日商業/處世諺語")
+
 def get_system_prompt():
     base_prompt = """你是一位專業的資訊整理助理。請將以下定時抓取的原始資訊，整理成結構清楚、適合手機閱讀的繁體中文linkedin風格的文章。同時，你需要從這篇商業故事中提煉出一個核心的「商業英語單字」與一句契合故事主軸的「商業/處世諺語」。
-
-輸出必須為嚴格的 JSON 格式，且包含以下結構：
-{
-  "story": "你的商業故事主文 (包含標題、條列重點、hashtag)",
-  "vocabulary": {
-    "word": "英文單字",
-    "pos": "詞性",
-    "pronunciation": "音標",
-    "example": "例句 (附中文翻譯)"
-  },
-  "proverb": {
-    "text": "諺語 (英文或中文)",
-    "explanation": "解釋與由來",
-    "usage": "應用場景或如何與今日故事連結"
-  }
-}
 
 排版原則 (僅針對 story 欄位)：
 1. 給出清晰的核心標題
@@ -44,16 +49,37 @@ def get_system_prompt():
             
     return base_prompt
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=4, max=15),
+    reraise=True
+)
+def _call_gemini_with_retry(client, full_prompt):
+    """
+    實際呼叫 API 的內部函數，若發生暫時性錯誤 (如 503) 會自動重試。
+    """
+    response = client.models.generate_content(
+        model="gemini-3.7-flash", # 使用 2026 最新最高效的 Gemini 模型
+        contents=full_prompt,
+        config={
+            "response_mime_type": "application/json",
+            "response_schema": DailyReportSchema,
+            "temperature": 0.7,
+        }
+    )
+    return response
+
 def summarize_with_llm(company_data, metrics, recent_history=None):
     """
-    呼叫 Groq API 將抓取到的公司資訊與 metrics 進行統整，並產出單字與諺語
+    呼叫 Gemini API 將抓取到的公司資訊與 metrics 進行統整，並產出單字與諺語
     """
-    if not GROQ_API_KEY:
-        logger.error("未設定 GROQ_API_KEY，無法呼叫 LLM 進行彙整")
+    if not GEMINI_API_KEY:
+        logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行彙整")
         return None
 
     try:
-        client = Groq(api_key=GROQ_API_KEY)
+        # Initialize Gemini SDK client
+        client = genai.Client(api_key=GEMINI_API_KEY)
         
         comp_name = company_data.get('name', '未知公司')
         stock_id = company_data.get('stock_id', '未知代碼')
@@ -78,27 +104,21 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
             user_content += f"已用單字：{', '.join(recent_history.get('vocab', []))}\n"
             user_content += f"已用諺語：{', '.join(recent_history.get('proverb', []))}\n"
         
-        logger.info(f"正在呼叫 Groq 彙整 {comp_name} 的資料...")
+        logger.info(f"正在呼叫 Gemini 彙整 {comp_name} 的資料...")
         
-        response = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "system",
-                    "content": get_system_prompt(),
-                },
-                {
-                    "role": "user",
-                    "content": user_content,
-                }
-            ],
-            model="llama3-70b-8192", # Groq 支援強大 JSON Mode 的模型
-            temperature=0.7,
-            response_format={"type": "json_object"},
-        )
+        # Combine system prompt and user content
+        full_prompt = f"{get_system_prompt()}\n\n{user_content}"
         
-        result_text = response.choices[0].message.content
-        return json.loads(result_text)
+        # 呼叫重試機制
+        response = _call_gemini_with_retry(client, full_prompt)
+        
+        # response.parsed returns the populated Pydantic object
+        report: DailyReportSchema = response.parsed
+        
+        # Convert the Pydantic object to a standard dictionary to match existing formatter logic
+        result_dict = report.model_dump()
+        return result_dict
         
     except Exception as e:
-        logger.error(f"呼叫 Groq API 失敗: {e}")
+        logger.error(f"呼叫 Gemini API 失敗 (或重試達上限): {e}")
         return None
