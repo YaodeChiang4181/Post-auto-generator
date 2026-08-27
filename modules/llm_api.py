@@ -50,8 +50,8 @@ def get_system_prompt():
     return base_prompt
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=2, min=4, max=15),
+    stop=stop_after_attempt(6),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
     reraise=True
 )
 def _call_gemini_with_retry(client, full_prompt):
