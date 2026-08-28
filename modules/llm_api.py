@@ -59,7 +59,7 @@ def _call_gemini_with_retry(client, full_prompt):
     實際呼叫 API 的內部函數，若發生暫時性錯誤 (如 503) 會自動重試。
     """
     response = client.models.generate_content(
-        model="gemini-3.7-flash", # 使用 2026 最新最高效的 Gemini 模型
+        model="gemini-3.6-flash", # 使用測試成功的 Gemini 模型
         contents=full_prompt,
         config={
             "response_mime_type": "application/json",
