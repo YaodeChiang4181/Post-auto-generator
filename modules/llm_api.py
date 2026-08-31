@@ -13,8 +13,9 @@ logger = get_logger(__name__)
 # 定義 Gemini 結構化輸出的 Pydantic Schema
 class VocabularySchema(BaseModel):
     word: str = Field(description="英文單字")
-    pos: str = Field(description="詞性 (例如: n., v., adj.)")
+    pos: str = Field(description="主要詞性 (例如: n., v., adj.)")
     pronunciation: str = Field(description="音標")
+    definition: str = Field(description="釋義 (若有多種詞性請分行列出，例如：【動詞】：... \\n【名詞】：...)")
     example: str = Field(description="例句 (附中文翻譯)")
 
 class ProverbSchema(BaseModel):

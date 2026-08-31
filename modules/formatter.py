@@ -26,6 +26,7 @@ def format_daily_report(company_data, metrics, recent_history=None):
         markdown_content = f"{story}\n\n"
         markdown_content += f"💡 **【今日商務單字】**\n"
         markdown_content += f"🔹 **{vocab.get('word', '')}** ({vocab.get('pos', '')}) /{vocab.get('pronunciation', '')}/\n"
+        markdown_content += f"👉 釋義：\n{vocab.get('definition', '')}\n\n"
         markdown_content += f"👉 例句：{vocab.get('example', '')}\n\n"
         markdown_content += f"📜 **【今日商業/處世諺語】**\n"
         markdown_content += f"🔹 **{proverb.get('text', '')}**\n"
@@ -54,6 +55,7 @@ def format_daily_report(company_data, metrics, recent_history=None):
             <div class="vocab-box">
                 <h2>💡 今日商務單字</h2>
                 <p><span class="word">{vocab.get('word', '')}</span> <span class="pronunciation">({vocab.get('pos', '')}) /{vocab.get('pronunciation', '')}/</span></p>
+                <p>👉 <strong>釋義：</strong><br>{vocab.get('definition', '').replace(chr(10), '<br>')}</p>
                 <p>👉 <strong>例句：</strong><br>{vocab.get('example', '').replace(chr(10), '<br>')}</p>
             </div>
             
