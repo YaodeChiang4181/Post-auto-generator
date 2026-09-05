@@ -123,3 +123,77 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
     except Exception as e:
         logger.error(f"呼叫 Gemini API 失敗 (或重試達上限): {e}")
         return None
+
+class NewsItemSchema(BaseModel):
+    rank: int = Field(description="排名 (1, 2, 3)")
+    title: str = Field(description="精煉且吸引人的繁體中文商業標題")
+    source_url: str = Field(description="該則新聞對應的原始連結")
+    impact_reason: str = Field(description="用 1 句話（30 字以內）說明為何該事件具備重大商業影響力")
+    summary: str = Field(description="80~130 字的精華脈絡摘要")
+
+class TopNewsSchema(BaseModel):
+    top_news: list[NewsItemSchema] = Field(description="精選出的 Top 3 新聞列表", min_length=3, max_length=3)
+
+def select_top_news_with_llm(candidates):
+    """
+    呼叫 Gemini API 從候選名單中篩選出 Top 3 新聞，並生成短評及翻譯
+    """
+    if not GEMINI_API_KEY:
+        logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行新聞篩選")
+        return None
+        
+    if not candidates:
+        logger.warning("沒有候選新聞可供篩選")
+        return None
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        system_prompt = (
+            "你是一名兼具總體經濟與產業投資視野的「資深商業分析師與晨報主編」。\n"
+            "你的任務是從輸入的今日候選新聞清單中，客觀評選出 3 則最關鍵、不可不知的重大商業事件，並提煉出結構扎實、脈絡清晰的精華摘要。\n\n"
+            "【評選權重標準】\n"
+            "1. 市場規模與資本流向：涉及巨額資本流動、央行政策、產業鏈核心異動者優先。\n"
+            "2. 結構性變革：顛覆現有商業模式、重大法規更迭或關鍵技術落地者優先。\n"
+            "3. 廣泛影響力：影響跨國市場或整體產業鏈，而非僅限單一小眾企業的日常營運。\n\n"
+            "【負面排除條件（嚴禁選入）】\n"
+            "- 單一企業的促銷宣傳、日常公關稿、贊助公告。\n"
+            "- 演藝娛樂、消費性產品微小版本更新、獵奇社會新聞。\n"
+            "- 彼此重覆的同一個新聞事件（若有多家報導同一事件，僅挑選最具代表性的一則）。\n\n"
+            "【輸出原則】\n"
+            "- 語言：統一輸出為繁體中文（台灣習慣用語，如「伺服器」、「演算法」、「半導體」）。若輸入為英文，請忠實轉換為專業流暢的中文表達。\n"
+            "- 事實約束：摘要必須 100% 基於候選文本所提及的事實，嚴禁杜撰未提供的具體財務數據或官方決策。"
+        )
+        
+        news_text_list = ""
+        for idx, item in enumerate(candidates):
+            news_text_list += f"[{idx+1}] 來源：{item['source']}\n標題：{item['title']}\n摘要：{item['summary']}\n連結：{item['link']}\n\n"
+            
+        user_content = (
+            "以下是自各大財經與科技媒體收集到的今日候選新聞列表：\n\n"
+            f"{news_text_list}\n"
+            "請仔細審視上述候選清單，執行以下動作：\n"
+            "1. 依據系統指令的權重標準，選出今日最具商業影響力的 Top 3 重大事件（排序 1 至 3）。\n"
+            "2. 每則新聞輸出指定的 JSON 結構（rank, title, source_url, impact_reason, summary）。"
+        )
+        
+        logger.info(f"正在呼叫 Gemini 篩選 Top 3 新聞 (候選數量: {len(candidates)})...")
+        
+        full_prompt = f"{system_prompt}\n\n{user_content}"
+        
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=full_prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": TopNewsSchema,
+                "temperature": 0.5,
+            }
+        )
+        
+        report: TopNewsSchema = response.parsed
+        return report.model_dump()
+        
+    except Exception as e:
+        logger.error(f"呼叫 Gemini 篩選新聞失敗: {e}")
+        return None
