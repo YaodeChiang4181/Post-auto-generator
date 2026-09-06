@@ -93,6 +93,26 @@ async def get_tag_detail(tag_name: str):
     if not details:
         raise HTTPException(status_code=404, detail="Tag not found")
         
+    # Backfill logic for old tags without related_keywords
+    if not details.get('related_keywords'):
+        from modules.llm_api import generate_tag_explanation
+        import json
+        logger.info(f"Tag '{tag_name}' is missing related_keywords. Regenerating...")
+        new_data = generate_tag_explanation(tag_name)
+        if new_data:
+            with state_manager._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute('''
+                        UPDATE tags SET explanation = %s, takeaway = %s, related_keywords = %s WHERE name = %s
+                    ''', (new_data.get('explanation', details.get('glossary', '')), 
+                          new_data.get('takeaway', details.get('takeaway', '')), 
+                          json.dumps(new_data.get('related_keywords', [])), 
+                          tag_name))
+                conn.commit()
+            details['glossary'] = new_data.get('explanation', details.get('glossary', ''))
+            details['takeaway'] = new_data.get('takeaway', details.get('takeaway', ''))
+            details['related_keywords'] = new_data.get('related_keywords', [])
+            
     return details
 
 if __name__ == "__main__":

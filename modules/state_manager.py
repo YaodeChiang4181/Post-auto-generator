@@ -56,8 +56,13 @@ class StateManager:
                         name TEXT UNIQUE NOT NULL,
                         tag_type TEXT NOT NULL,
                         explanation TEXT,
-                        takeaway TEXT
+                        takeaway TEXT,
+                        related_keywords TEXT
                     )
+                ''')
+                # For existing databases, add the column if missing
+                cursor.execute('''
+                    ALTER TABLE tags ADD COLUMN IF NOT EXISTS related_keywords TEXT
                 ''')
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS article_tags (
@@ -185,10 +190,10 @@ class StateManager:
                 for tag in tags_info:
                     # Insert or ignore tag
                     cursor.execute('''
-                        INSERT INTO tags (name, tag_type, explanation, takeaway)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO tags (name, tag_type, explanation, takeaway, related_keywords)
+                        VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (name) DO NOTHING
-                    ''', (tag['name'], tag.get('type', 'Entity'), tag.get('explanation', ''), tag.get('takeaway', '')))
+                    ''', (tag['name'], tag.get('type', 'Entity'), tag.get('explanation', ''), tag.get('takeaway', ''), json.dumps(tag.get('related_keywords', []))))
                     
                     # Retrieve tag_id
                     cursor.execute('SELECT id FROM tags WHERE name = %s', (tag['name'],))
@@ -197,8 +202,8 @@ class StateManager:
                     # If explanation is missing but provided now, update it
                     if tag.get('explanation'):
                         cursor.execute('''
-                            UPDATE tags SET explanation = %s, takeaway = %s WHERE id = %s AND (explanation IS NULL OR explanation = '')
-                        ''', (tag['explanation'], tag.get('takeaway', ''), tag_id))
+                            UPDATE tags SET explanation = %s, takeaway = %s, related_keywords = %s WHERE id = %s AND (explanation IS NULL OR explanation = '' OR related_keywords IS NULL)
+                        ''', (tag['explanation'], tag.get('takeaway', ''), json.dumps(tag.get('related_keywords', [])), tag_id))
                     
                     # Link article and tag
                     cursor.execute('''
@@ -237,11 +242,19 @@ class StateManager:
                 for a in articles:
                     a['date'] = a['date'].isoformat() if a['date'] else ''
                 
+                related_keywords = []
+                if tag_data.get('related_keywords'):
+                    try:
+                        related_keywords = json.loads(tag_data['related_keywords'])
+                    except:
+                        related_keywords = []
+
                 return {
                     "type": tag_data['tag_type'],
                     "title": tag_data['name'],
                     "glossary": tag_data['explanation'],
                     "takeaway": tag_data['takeaway'],
+                    "related_keywords": related_keywords,
                     "tags": [tag_data['name']],
                     "timeline": articles
                 }
