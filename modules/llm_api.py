@@ -216,6 +216,7 @@ def select_top_news_with_llm(candidates):
 class TagExplanationSchema(BaseModel):
     explanation: str = Field(description="150 字內的白話科普解釋")
     takeaway: str = Field(description="一句話的商業洞察、市場影響或 Takeaway")
+    related_keywords: list[str] = Field(description="從解釋中挑選出 3 個與此高度相關的其他商業、科技或事件關鍵字", min_length=3, max_length=3)
 
 def generate_tag_explanation(tag_name):
     """
@@ -230,9 +231,10 @@ def generate_tag_explanation(tag_name):
         
         system_prompt = (
             "你是一位頂尖的科技商業分析師，擅長用極簡、白話的方式將硬核名詞解釋給非技術背景的投資人聽。\n"
-            "你的任務是針對使用者輸入的名詞（可能是技術、公司名、經濟指標），產出兩項內容：\n"
+            "你的任務是針對使用者輸入的名詞（可能是技術、公司名、經濟指標），產出三項內容：\n"
             "1. 150 字內的精華科普 (Glossary)：講重點，不要說廢話。\n"
-            "2. 一句話的 Takeaway：點出它為什麼重要，或者目前的市場地位/影響力。"
+            "2. 一句話的 Takeaway：點出它為什麼重要，或者目前的市場地位/影響力。\n"
+            "3. 3 個相關關鍵字：從你的解釋中，挑選出 3 個能進一步延伸閱讀的相關商業或科技關鍵字。"
         )
         
         user_content = f"請解釋這個名詞：{tag_name}"

@@ -139,7 +139,7 @@
             );
         };
 
-        const DeepDivePanel = ({ tag, cache, setCache, onClose }) => {
+        const DeepDivePanel = ({ tag, cache, setCache, onClose, setActiveTag }) => {
             const [data, setData] = useState(cache[tag]);
             const [loading, setLoading] = useState(!cache[tag]);
             const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
@@ -151,7 +151,10 @@
             }, []);
 
             useEffect(() => {
-                if (!cache[tag]) {
+                if (cache[tag]) {
+                    setData(cache[tag]);
+                    setLoading(false);
+                } else {
                     setLoading(true);
                     fetch(`/api/tags/${encodeURIComponent(tag)}`)
                         .then(r => r.json())
@@ -161,7 +164,7 @@
                             setLoading(false);
                         });
                 }
-            }, [tag]);
+            }, [tag, cache, setCache]);
 
             if (loading) return (
                 <div className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'items-end'}`}>
@@ -196,6 +199,19 @@
                                     <div className="mt-4 p-3 bg-red-950/20 rounded-sm border border-primaryRed/20">
                                         <p className="text-sm text-white font-medium leading-snug">{data.takeaway}</p>
                                     </div>
+                                    {data.related_keywords && data.related_keywords.length > 0 && (
+                                        <div className="mt-4 flex gap-2 flex-wrap">
+                                            {data.related_keywords.map(kw => (
+                                                <span 
+                                                    key={kw}
+                                                    onClick={(e) => { e.stopPropagation(); setActiveTag(kw); }}
+                                                    className="px-2 py-1 text-xs font-mono tracking-wide bg-obsidian border border-gray-700 text-gray-400 hover:border-primaryRed hover:text-white cursor-pointer rounded-sm transition-colors uppercase"
+                                                >
+                                                    # {kw}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </section>
                             <section>
@@ -432,6 +448,7 @@
                             cache={cache} 
                             setCache={setCache} 
                             onClose={(e) => { if(e) e.stopPropagation(); setActiveTag(null); }} 
+                            setActiveTag={setActiveTag}
                         />
                     )}
                 </div>
