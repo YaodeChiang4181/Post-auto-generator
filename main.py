@@ -1,8 +1,9 @@
 import sys
 from logger import get_logger
 from modules.gov_api import get_random_company
-from modules.company_api import fetch_all_metrics
-from modules.llm_api import format_daily_report, select_top_news_with_llm, generate_tag_explanation
+from modules.news_api import fetch_all_metrics
+from modules.formatter import format_daily_report
+from modules.llm_api import select_top_news_with_llm, generate_tag_explanation
 from modules.telegram_bot import send_to_telegram
 from modules.state_manager import StateManager
 from modules.news_aggregator import get_daily_news_candidates

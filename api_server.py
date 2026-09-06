@@ -79,8 +79,8 @@ async def get_today_orbit():
                 ''', (article['id'],))
                 
                 tags = [dict(t_row) for t_row in cursor.fetchall()]
-            article['tags'] = tags
-            orbit_data.append(article)
+                article['tags'] = tags
+                orbit_data.append(article)
             
         return {"orbit": orbit_data}
 
