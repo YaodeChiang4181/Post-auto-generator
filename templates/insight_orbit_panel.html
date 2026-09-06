@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>InsightOrbit - Financial Terminal</title>
+    <title>InsightOrbit - Editorial Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -14,8 +14,8 @@
             theme: {
                 extend: {
                     colors: {
-                        obsidian: '#000000', // 純黑霧面底
-                        primaryRed: '#FF2A42', // 霓虹電氣紅
+                        obsidian: '#0D0D11', // 純粹的冷曜石黑
+                        primaryRed: '#E3120B', // The Economist 極平整鮮紅
                         orbitDark: '#120507',
                         darkRed: '#2A080D'
                     },
@@ -45,23 +45,19 @@
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .bottom-sheet { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-        .bottom-sheet.dragging { transition: none; }
         
         .glass-orb {
-            background: rgba(0, 0, 0, 0.9);
-            backdrop-filter: blur(12px);
-            border: 1.5px solid #FF2A42;
-            box-shadow: 0 0 45px rgba(255, 42, 66, 0.45);
-            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(227, 18, 11, 0.3);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         
-        .glass-orb:hover {
-            box-shadow: 0 0 60px rgba(255, 42, 66, 0.6);
+        .glass-orb:hover, .glass-orb.active-orb {
+            border: 1.5px solid #E3120B;
         }
 
         .orbit-ring {
-            border: 1.5px dashed rgba(255, 42, 66, 0.25);
+            border: 1px solid rgba(227, 18, 11, 0.15);
             border-radius: 50%;
             position: absolute;
             top: 50%;
@@ -72,12 +68,12 @@
         .orbit-ring:nth-child(2) {
             animation-duration: 180s;
             animation-direction: reverse;
-            border: 1px dashed rgba(255, 42, 66, 0.15);
+            border: 1px solid rgba(227, 18, 11, 0.1);
         }
 
         .orbit-ring:nth-child(3) {
             animation-duration: 240s;
-            border: 1px dashed rgba(255, 42, 66, 0.1);
+            border: 1px solid rgba(227, 18, 11, 0.05);
         }
         
         .capsule {
@@ -110,7 +106,17 @@
 
             return (
                 <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-40 pointer-events-none">
-                    <h1 className="text-white font-bold tracking-widest uppercase text-sm">Orbit of {new Date().toISOString().split('T')[0]}</h1>
+                    <div className="flex items-center space-x-4">
+                        <div className="w-8 h-8 bg-primaryRed flex items-center justify-center font-bold text-white tracking-tighter">
+                            IN
+                        </div>
+                        <div className="h-5 w-px bg-gray-600"></div>
+                        <div className="text-white font-bold tracking-widest uppercase text-sm">INSIGHTORBIT</div>
+                        <div className="text-gray-500 font-mono text-xs tracking-wider uppercase hidden sm:block">ORBIT // {new Date().toISOString().split('T')[0]}</div>
+                    </div>
+                    <div className="font-mono text-sm tracking-wider text-slate-400">
+                        NEXT SYNC <span className="text-primaryRed">{time}</span>
+                    </div>
                 </div>
             );
         };
@@ -168,11 +174,11 @@
 
             return (
                 <div className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'items-end'}`}>
-                    <div className="absolute inset-0 bg-[#000000]/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-                    <div className={`relative bg-gradient-to-b from-[#120507] to-[#000000] border-l border-red-900/30 flex flex-col shadow-2xl ${isDesktop ? 'h-full w-[480px] lg:w-[560px]' : 'w-full rounded-t-3xl h-[85vh]'}`}>
+                    <div className="absolute inset-0 bg-obsidian/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+                    <div className={`relative bg-obsidian border-l border-red-900/30 flex flex-col shadow-2xl ${isDesktop ? 'h-full w-[480px] lg:w-[560px]' : 'w-full rounded-t-3xl h-[85vh]'}`}>
                         <div className="h-16 flex items-center justify-between px-6 border-b border-red-900/30">
                             <div className="flex items-center space-x-3">
-                                <span className="px-2 py-1 text-xs font-mono tracking-wider text-primaryRed bg-red-950/40 border border-primaryRed/30 rounded">
+                                <span className="px-2 py-1 text-xs font-mono tracking-wider text-primaryRed border border-primaryRed/30 rounded-sm">
                                     {(!data.type || data.type.toLowerCase() === 'entity') ? 'TOPIC' : data.type.toUpperCase()}
                                 </span>
                                 <h2 className="text-xl font-bold text-white">{data.title}</h2>
@@ -181,28 +187,28 @@
                         </div>
                         <div className="flex-1 px-6 py-5 overflow-y-auto no-scrollbar space-y-8">
                             <section>
-                                <h3 className="text-sm font-mono text-gray-400 mb-3 uppercase">AI Glossary</h3>
-                                <div className="bg-red-950/10 p-4 rounded-xl border border-red-900/20">
+                                <h3 className="text-xs font-mono text-gray-500 mb-3 uppercase tracking-widest">AI Glossary</h3>
+                                <div className="p-4 rounded-sm border border-gray-800">
                                     <p className="text-gray-300 leading-relaxed text-sm">{data.glossary || data.explanation}</p>
-                                    <div className="mt-4 p-3 bg-red-950/40 rounded border border-red-500/20">
+                                    <div className="mt-4 p-3 bg-red-950/20 rounded-sm border border-primaryRed/20">
                                         <p className="text-sm text-white font-medium leading-snug">{data.takeaway}</p>
                                     </div>
                                 </div>
                             </section>
                             <section>
-                                <h3 className="text-sm font-mono text-gray-400 mb-4 uppercase">Historical Events</h3>
+                                <h3 className="text-xs font-mono text-gray-500 mb-4 uppercase tracking-widest">Historical Events</h3>
                                 {(!data.timeline || data.timeline.length === 0) ? (
-                                    <div className="text-center py-6 border border-dashed border-red-900/40 rounded-xl">
-                                        <p className="text-gray-500 text-sm">First observed in today's orbit.</p>
+                                    <div className="text-center py-6 border border-dashed border-gray-800 rounded-sm">
+                                        <p className="text-gray-600 text-sm font-mono">First observed in today's orbit.</p>
                                     </div>
                                 ) : (
-                                    <div className="relative border-l border-red-900/50 ml-2 space-y-6">
+                                    <div className="relative border-l border-gray-700 ml-2 space-y-6">
                                         {data.timeline.map((event, idx) => (
                                             <div key={idx} className="relative pl-5">
-                                                <div className={`absolute -left-[4.5px] top-1 w-2 h-2 rounded-full ${idx===0 ? 'bg-primaryRed shadow-[0_0_10px_#FF2A42]' : 'bg-gray-600'}`}></div>
+                                                <div className={`absolute -left-[4.5px] top-1 w-2 h-2 rounded-full ${idx===0 ? 'bg-primaryRed' : 'bg-gray-600'}`}></div>
                                                 <div className="text-xs font-mono text-gray-500 mb-1">{event.date.substring(0,10)}</div>
-                                                <h4 className="text-sm font-bold text-white mb-1">{event.headline}</h4>
-                                                <p className="text-sm text-gray-400">{event.summary}</p>
+                                                <h4 className="text-sm font-bold text-white mb-1 leading-snug">{event.headline}</h4>
+                                                <p className="text-sm text-gray-400 leading-relaxed">{event.summary}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -233,7 +239,10 @@
                 
                 // Esc key to close global
                 const handleKeyDown = (e) => {
-                    if (e.key === 'Escape') setActiveArticle(null);
+                    if (e.key === 'Escape') {
+                        if (activeTag) setActiveTag(null);
+                        else setActiveArticle(null);
+                    }
                 };
                 window.addEventListener('keydown', handleKeyDown);
                 
@@ -241,7 +250,7 @@
                     window.removeEventListener('resize', handleResize);
                     window.removeEventListener('keydown', handleKeyDown);
                 };
-            }, []);
+            }, [activeTag]);
 
             // Desktop Triangle
             const desktopCoords = [
@@ -263,9 +272,9 @@
             const anims = ['animate-subtle-float', 'animate-subtle-float-delayed', 'animate-subtle-float-slow'];
             
             const categoryLabels = [
-                '[REGULATORY // 監管與法規]', 
-                '[SUPPLY CHAIN // 供應鏈重組]', 
-                '[MARKET MOVER // 營收與動能]'
+                'MACRO', 
+                'SUPPLY CHAIN', 
+                'EQUITY'
             ];
 
             const handleOrbClick = (article, e) => {
@@ -289,7 +298,7 @@
                     {activeArticle && (
                         <button 
                             onClick={closeLevel2}
-                            className="absolute top-6 left-6 z-50 text-white opacity-40 hover:opacity-100 hover:text-primaryRed text-2xl transition-all cursor-pointer"
+                            className="absolute top-6 left-6 z-50 text-gray-500 hover:text-white text-2xl transition-all cursor-pointer hidden md:block"
                         >
                             ✕
                         </button>
@@ -311,7 +320,7 @@
                                         <line 
                                             key={`line-${idx}`}
                                             x1={startX} y1={startY} x2={endX} y2={endY}
-                                            stroke="#FF2A42" strokeWidth="1.5" strokeDasharray="4 4"
+                                            stroke="#E3120B" strokeWidth="1" strokeDasharray="4 4"
                                             className="animate-pulse"
                                         />
                                     );
@@ -324,7 +333,7 @@
                                 const capLeft = isDesktop ? '55%' : '50%';
                                 // Apply type-based styling
                                 const t = (tag.type || '').toLowerCase();
-                                let capsuleClass = "border border-primaryRed/40 bg-red-950/80 hover:bg-primaryRed/20 text-white"; // default
+                                let capsuleClass = "border border-gray-700 bg-obsidian hover:border-primaryRed text-white"; // default
                                 if (t === 'entity' || t === '機構' || t === '企業') {
                                     capsuleClass = "bg-white text-black font-bold hover:bg-gray-200 border-white";
                                 } else if (t === 'market' || t === '變革') {
@@ -335,15 +344,15 @@
                                     <div 
                                         key={tag.name}
                                         onClick={(e) => { e.stopPropagation(); setActiveTag(tag.name); }}
-                                        className="absolute z-30 capsule cursor-pointer transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                                        className="absolute z-30 capsule cursor-pointer transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto shadow-xl"
                                         style={{ top: capTop, left: capLeft }}
                                     >
-                                        <div className={`px-4 py-2 rounded-full flex items-center space-x-2 transition-colors ${capsuleClass}`}>
+                                        <div className={`px-4 py-2 rounded-sm flex items-center space-x-2 transition-colors ${capsuleClass}`}>
                                             {(t !== 'entity' && t !== '機構' && t !== '企業') && (
-                                                <div className="w-2 h-2 rounded-full bg-white"></div>
+                                                <div className="w-1.5 h-1.5 bg-current"></div>
                                             )}
-                                            <span className="text-sm tracking-wide">{tag.name}</span>
-                                            <span className="opacity-70 text-xs font-mono ml-1">↗</span>
+                                            <span className="text-sm tracking-wide font-mono">{tag.name}</span>
+                                            <span className="opacity-50 text-xs font-mono ml-1">↗</span>
                                         </div>
                                     </div>
                                 );
@@ -359,34 +368,35 @@
                         
                         const isTop1 = i === 0;
                         const baseSize = isTop1 ? 'w-64 h-64 lg:w-72 lg:h-72' : 'w-52 h-52 lg:w-56 lg:h-56';
-                        // Active size slightly shrunk by 10% (using Tailwind scale-90 or just smaller width)
                         const activeSize = 'w-56 h-56 lg:w-64 lg:h-64'; 
+                        
+                        const labelText = categoryLabels[i] || `TAG ${i+1}`;
 
                         return (
                             <div 
                                 key={article.id}
                                 onClick={(e) => handleOrbClick(article, e)}
                                 className={`absolute z-30 glass-orb rounded-full flex flex-col items-center justify-center p-8 cursor-pointer transition-all duration-300
-                                    -translate-x-1/2 -translate-y-1/2
+                                    -translate-x-1/2 -translate-y-1/2 ${isActive ? 'active-orb' : ''}
                                     ${activeArticle ? '' : anims[i]}
-                                    ${isActive ? `${activeSize}` : `${baseSize} hover:scale-105`}
+                                    ${isActive ? `${activeSize}` : `${baseSize}`}
                                     ${isFaded ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100'}
                                 `}
                                 style={{ top: coords.top, left: coords.left }}
                             >
-                                {/* External Label */}
-                                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 text-primaryRed font-sans text-5xl lg:text-6xl font-black italic opacity-90 drop-shadow-[0_0_15px_rgba(255,42,66,0.8)]">
-                                    {i + 1}
+                                {/* External Label (Editorial Style) */}
+                                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-gray-500 font-mono text-xs uppercase tracking-widest whitespace-nowrap">
+                                    [ 0{i+1} // {labelText} ]
                                 </div>
                                 
-                                <h2 className="text-white font-bold text-base lg:text-lg text-center leading-relaxed break-words w-full px-2 line-clamp-3" style={{ wordBreak: 'break-word' }}>
+                                <h2 className="text-white font-bold text-base lg:text-lg text-center leading-[1.4] break-words w-full px-4 line-clamp-3" style={{ wordBreak: 'break-word' }}>
                                     {article.title}
                                 </h2>
                                 
                                 {!isActive && (
-                                    <div className="mt-5 flex flex-wrap justify-center gap-2 opacity-80">
+                                    <div className="mt-5 flex flex-wrap justify-center gap-2">
                                         {article.tags.slice(0,2).map(t => (
-                                            <span key={t.name} className="text-[11px] text-gray-200 uppercase px-2 py-0.5 border border-gray-500 rounded bg-black/40">
+                                            <span key={t.name} className="text-[11px] text-white font-bold uppercase px-3 py-1 bg-primaryRed rounded-sm tracking-wide">
                                                 {t.name}
                                             </span>
                                         ))}
