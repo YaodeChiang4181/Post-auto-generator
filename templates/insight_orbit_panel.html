@@ -75,7 +75,7 @@
     </style>
 </head>
 <body class="bg-obsidian text-gray-300 overflow-hidden h-screen w-screen relative font-sans">
-    <div id="root"></div>
+    <div id="root" class="w-full h-full"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -312,7 +312,8 @@
                             <div 
                                 key={article.id}
                                 onClick={(e) => handleOrbClick(article, e)}
-                                className={`absolute z-30 glass-orb rounded-full flex flex-col items-center justify-center p-6 cursor-pointer transform transition-all duration-700
+                                className={`absolute z-30 glass-orb rounded-full flex flex-col items-center justify-center p-6 cursor-pointer transition-all duration-700
+                                    -translate-x-1/2 -translate-y-1/2
                                     ${activeArticle ? '' : anims[i]}
                                     ${isActive ? 'w-64 h-64 orb-glow' : 'w-56 h-56 hover:scale-105 hover:orb-glow'}
                                     ${isFaded ? 'opacity-20 scale-75 pointer-events-none' : 'opacity-100'}
@@ -322,7 +323,7 @@
                                 <div className="text-primaryRed font-mono text-xs uppercase tracking-widest mb-2 font-bold bg-black/50 px-2 py-1 rounded">
                                     [IMPACT // TOP {i+1}]
                                 </div>
-                                <h2 className="text-white font-bold text-lg text-center leading-snug line-clamp-3 w-full">
+                                <h2 className="text-white font-bold text-lg text-center leading-snug break-words w-full px-2" style={{ wordBreak: 'break-word' }}>
                                     {article.title}
                                 </h2>
                                 {!isActive && (
