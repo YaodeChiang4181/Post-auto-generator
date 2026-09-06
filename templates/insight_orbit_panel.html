@@ -61,7 +61,7 @@
         }
 
         .orbit-ring {
-            border: 1px solid rgba(42, 8, 13, 0.8);
+            border: 1px solid rgba(255, 30, 66, 0.15);
             border-radius: 50%;
             position: absolute;
             top: 50%;
@@ -308,28 +308,36 @@
                         const isFaded = activeArticle && !isActive;
                         const coords = activeArticle ? (isActive ? activeCoords : getCoords(i)) : getCoords(i);
                         
+                        const isTop1 = i === 0;
+                        const baseSize = isTop1 ? 'w-64 h-64 lg:w-72 lg:h-72' : 'w-52 h-52 lg:w-56 lg:h-56';
+                        const activeSize = 'w-64 h-64 lg:w-72 lg:h-72';
+                        const staticGlow = isTop1 ? 'shadow-[0_0_40px_rgba(230,0,40,0.4)]' : '';
+
                         return (
                             <div 
                                 key={article.id}
                                 onClick={(e) => handleOrbClick(article, e)}
-                                className={`absolute z-30 glass-orb rounded-full flex flex-col items-center justify-center p-6 cursor-pointer transition-all duration-700
+                                className={`absolute z-30 glass-orb rounded-full flex flex-col items-center justify-center p-8 cursor-pointer transition-all duration-700
                                     -translate-x-1/2 -translate-y-1/2
                                     ${activeArticle ? '' : anims[i]}
-                                    ${isActive ? 'w-64 h-64 orb-glow' : 'w-56 h-56 hover:scale-105 hover:orb-glow'}
+                                    ${isActive ? `${activeSize} orb-glow` : `${baseSize} hover:scale-105 ${staticGlow}`}
                                     ${isFaded ? 'opacity-20 scale-75 pointer-events-none' : 'opacity-100'}
                                 `}
                                 style={{ top: coords.top, left: coords.left }}
                             >
-                                <div className="text-primaryRed font-mono text-xs uppercase tracking-widest mb-2 font-bold bg-black/50 px-2 py-1 rounded">
+                                {/* External Label */}
+                                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-primaryRed font-mono text-xs uppercase tracking-widest font-bold whitespace-nowrap">
                                     [IMPACT // TOP {i+1}]
                                 </div>
-                                <h2 className="text-white font-bold text-lg text-center leading-snug break-words w-full px-2" style={{ wordBreak: 'break-word' }}>
+                                
+                                <h2 className="text-white font-bold text-lg text-center leading-relaxed break-words w-full px-2 line-clamp-3" style={{ wordBreak: 'break-word' }}>
                                     {article.title}
                                 </h2>
+                                
                                 {!isActive && (
-                                    <div className="mt-4 flex flex-wrap justify-center gap-1 opacity-60">
+                                    <div className="mt-5 flex flex-wrap justify-center gap-2 opacity-80">
                                         {article.tags.slice(0,2).map(t => (
-                                            <span key={t.name} className="text-[10px] text-gray-300 uppercase px-1 border border-gray-600 rounded">
+                                            <span key={t.name} className="text-[11px] text-gray-200 uppercase px-2 py-0.5 border border-gray-500 rounded bg-black/40">
                                                 {t.name}
                                             </span>
                                         ))}
