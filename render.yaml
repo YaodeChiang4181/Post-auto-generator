@@ -15,7 +15,5 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
-    disk:
-      name: insightorbit-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+      - key: DATABASE_URL
+        sync: false

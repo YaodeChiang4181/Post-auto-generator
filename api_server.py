@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import os
-import sqlite3
+import psycopg2.extras
 from typing import List, Optional
 
 from modules.state_manager import StateManager
@@ -55,31 +55,30 @@ async def get_today_orbit():
     Get today's Top 3 news and their associated tags for the Level 1 Bubble View.
     """
     with state_manager._get_connection() as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        # Get the latest 3 articles
-        cursor.execute('''
-            SELECT id, title, summary, source_url, source_name, created_at
-            FROM articles
-            ORDER BY created_at DESC
-            LIMIT 3
-        ''')
-        articles_rows = cursor.fetchall()
-        
-        orbit_data = []
-        for row in articles_rows:
-            article = dict(row)
-            
-            # Fetch tags for this article
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+            # Get the latest 3 articles
             cursor.execute('''
-                SELECT t.name, t.tag_type
-                FROM tags t
-                JOIN article_tags at ON t.id = at.tag_id
-                WHERE at.article_id = ?
-            ''', (article['id'],))
+                SELECT id, title, summary, source_url, source_name, created_at
+                FROM articles
+                ORDER BY created_at DESC
+                LIMIT 3
+            ''')
+            articles_rows = cursor.fetchall()
             
-            tags = [dict(t_row) for t_row in cursor.fetchall()]
+            orbit_data = []
+            for row in articles_rows:
+                article = dict(row)
+                article['created_at'] = article['created_at'].isoformat() if article.get('created_at') else ''
+                
+                # Fetch tags for this article
+                cursor.execute('''
+                    SELECT t.name, t.tag_type
+                    FROM tags t
+                    JOIN article_tags at ON t.id = at.tag_id
+                    WHERE at.article_id = %s
+                ''', (article['id'],))
+                
+                tags = [dict(t_row) for t_row in cursor.fetchall()]
             article['tags'] = tags
             orbit_data.append(article)
             
