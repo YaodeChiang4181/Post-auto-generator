@@ -10,7 +10,7 @@ from typing import List, Optional
 from modules.state_manager import StateManager
 from logger import get_logger
 from apscheduler.schedulers.background import BackgroundScheduler
-import main as scraper_main
+import run_news as scraper_news
 
 logger = get_logger(__name__)
 
@@ -28,8 +28,8 @@ app.add_middleware(
 @app.on_event("startup")
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # Run the main automation script every day at 00:00 UTC (8:00 AM TW time)
-    scheduler.add_job(scraper_main.main, 'cron', hour=0, minute=0)
+    # Run the news automation script every day at 00:00 UTC (8:00 AM TW time)
+    scheduler.add_job(scraper_news.run, 'cron', hour=0, minute=0)
     scheduler.start()
     logger.info("Background scheduler started (cron set to 00:00 UTC).")
 
