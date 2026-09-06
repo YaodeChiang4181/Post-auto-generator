@@ -157,10 +157,19 @@
                 } else {
                     setLoading(true);
                     fetch(`/api/tags/${encodeURIComponent(tag)}`)
-                        .then(r => r.json())
+                        .then(r => r.ok ? r.json() : null)
                         .then(d => {
-                            setCache(prev => ({...prev, [tag]: d}));
-                            setData(d);
+                            if (d) {
+                                setCache(prev => ({...prev, [tag]: d}));
+                                setData(d);
+                            } else {
+                                setData(null);
+                            }
+                            setLoading(false);
+                        })
+                        .catch(e => {
+                            console.error(e);
+                            setData(null);
                             setLoading(false);
                         });
                 }
@@ -251,7 +260,9 @@
                     .then(d => {
                         if (d.orbit) setOrbit(d.orbit);
                     });
-                
+            }, []);
+
+            useEffect(() => {
                 const handleResize = () => setIsDesktop(window.innerWidth >= 768);
                 window.addEventListener('resize', handleResize);
                 

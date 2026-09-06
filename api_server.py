@@ -91,10 +91,35 @@ def get_tag_detail(tag_name: str):
     """
     details = state_manager.get_tag_details(tag_name)
     if not details:
-        raise HTTPException(status_code=404, detail="Tag not found")
+        # Auto-generate if tag is missing from database
+        from modules.llm_api import generate_tag_explanation
+        import json
+        logger.info(f"Tag '{tag_name}' not found. Auto-generating on the fly...")
+        new_data = generate_tag_explanation(tag_name)
+        if new_data:
+            with state_manager._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute('''
+                        INSERT INTO tags (name, tag_type, explanation, takeaway, related_keywords)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (name) DO NOTHING
+                    ''', (tag_name, 'Concept', new_data.get('explanation', ''), new_data.get('takeaway', ''), json.dumps(new_data.get('related_keywords', []))))
+                conn.commit()
+            
+            details = {
+                "type": "Concept",
+                "title": tag_name,
+                "glossary": new_data.get('explanation', ''),
+                "takeaway": new_data.get('takeaway', ''),
+                "related_keywords": new_data.get('related_keywords', []),
+                "tags": [tag_name],
+                "timeline": []
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Tag not found and failed to auto-generate")
         
     # Backfill logic for old tags without related_keywords
-    if not details.get('related_keywords'):
+    elif not details.get('related_keywords'):
         from modules.llm_api import generate_tag_explanation
         import json
         logger.info(f"Tag '{tag_name}' is missing related_keywords. Regenerating...")
