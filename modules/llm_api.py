@@ -189,7 +189,7 @@ def select_top_news_with_llm(candidates):
             "請仔細審視上述候選清單，執行以下動作：\n"
             "1. 依據系統指令的權重標準，選出今日最具商業影響力的 Top 3 重大事件（排序 1 至 3）。\n"
             "2. 每則新聞輸出指定的 JSON 結構（rank, title, source_url, impact_reason, summary, tags）。\n"
-            "   - 針對 tags 欄位，請為每則新聞萃取 3~5 個關鍵字（例如公司名、關鍵技術、總經指標等），並歸類其 type。"
+            "   - 針對 tags 欄位，請為每則新聞萃取 3~5 個關鍵字（請盡量涵蓋公司名、關鍵技術，以及「供應鏈」、「監管」、「營收動能」等宏觀商業主題），並歸類其 type。"
         )
         
         logger.info(f"正在呼叫 Gemini 篩選 Top 3 新聞 (候選數量: {len(candidates)})...")

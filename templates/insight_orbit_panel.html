@@ -115,13 +115,23 @@
             );
         };
 
-        const OrbitBackground = () => (
-            <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
-                <div className="orbit-ring w-[40vw] h-[40vw] min-w-[300px] min-h-[300px] max-w-[500px] max-h-[500px]"></div>
-                <div className="orbit-ring w-[60vw] h-[60vw] min-w-[500px] min-h-[500px] max-w-[800px] max-h-[800px]"></div>
-                <div className="orbit-ring w-[80vw] h-[80vw] min-w-[700px] min-h-[700px] max-w-[1100px] max-h-[1100px]"></div>
-            </div>
-        );
+        const OrbitBackground = ({ activeArticle, isDesktop }) => {
+            // When inactive, align rings with the triangle center (left: 50%, top: 55%)
+            // When active, align rings with the active orb (left: 25%, top: 50% for desktop)
+            const centerX = activeArticle ? (isDesktop ? '25%' : '50%') : '50%';
+            const centerY = activeArticle ? (isDesktop ? '50%' : '15%') : '55%';
+            
+            return (
+                <div 
+                    className="absolute inset-0 pointer-events-none overflow-hidden transition-transform duration-1000 ease-in-out"
+                    style={{ transform: `translate(calc(${centerX} - 50%), calc(${centerY} - 55%))` }}
+                >
+                    <div className="orbit-ring w-[40vw] h-[40vw] min-w-[300px] min-h-[300px] max-w-[500px] max-h-[500px]"></div>
+                    <div className="orbit-ring w-[60vw] h-[60vw] min-w-[500px] min-h-[500px] max-w-[800px] max-h-[800px]"></div>
+                    <div className="orbit-ring w-[80vw] h-[80vw] min-w-[700px] min-h-[700px] max-w-[1100px] max-h-[1100px]"></div>
+                </div>
+            );
+        };
 
         const DeepDivePanel = ({ tag, cache, setCache, onClose }) => {
             const [data, setData] = useState(cache[tag]);
@@ -175,7 +185,7 @@
                                 <div className="bg-red-950/10 p-4 rounded-xl border border-red-900/20">
                                     <p className="text-gray-300 leading-relaxed text-sm">{data.glossary || data.explanation}</p>
                                     <div className="mt-4 p-3 bg-red-950/40 rounded border border-red-500/20">
-                                        <p className="text-sm text-white font-medium leading-snug">💡 {data.takeaway}</p>
+                                        <p className="text-sm text-white font-medium leading-snug">{data.takeaway}</p>
                                     </div>
                                 </div>
                             </section>
@@ -285,7 +295,7 @@
                         </button>
                     )}
                     
-                    <OrbitBackground />
+                    <OrbitBackground activeArticle={activeArticle} isDesktop={isDesktop} />
                     
                     {/* Level 2: Neural Beams & Capsules */}
                     {activeArticle && (
