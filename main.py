@@ -1,12 +1,11 @@
 import sys
 from logger import get_logger
 from modules.gov_api import get_random_company
-from modules.news_api import fetch_all_metrics
-from modules.formatter import format_daily_report
+from modules.company_api import fetch_all_metrics
+from modules.llm_api import format_daily_report, select_top_news_with_llm, generate_tag_explanation
 from modules.telegram_bot import send_to_telegram
 from modules.state_manager import StateManager
 from modules.news_aggregator import get_daily_news_candidates
-from modules.llm_api import select_top_news_with_llm
 
 
 logger = get_logger("main")
@@ -32,9 +31,9 @@ def main():
     metrics = fetch_all_metrics(company)
     
     # 3. Format Data (With LLM JSON output)
-    logger.info("Formatting daily report with Vocabulary and Proverb...")
+    logger.info("Formatting daily report with Vocabulary, Proverb, and German word...")
     recent_history = state_manager.get_recent_history(days=30)
-    post_draft, vocab_word, proverb_text = format_daily_report(company, metrics, recent_history)
+    post_draft, vocab_word, proverb_text, german_word = format_daily_report(company, metrics, recent_history)
     
     if not post_draft:
         logger.error("Failed to format report. Exiting.")
@@ -60,7 +59,28 @@ def main():
             news_msg += f"[{item['rank']}] {item['title']}\n"
             news_msg += f"💡 關鍵影響：{item['impact_reason']}\n"
             news_msg += f"📝 摘要：{item['summary']}\n"
+            tags_str = ", ".join([f"#{t['name']}" for t in item.get('tags', [])])
+            news_msg += f"🏷 標籤：{tags_str}\n"
             news_msg += f"🔗 原文連結：{item['source_url']}\n\n"
+            
+            # InsightOrbit: Generate tag explanations and save to DB
+            enriched_tags = []
+            for tag in item.get('tags', []):
+                explanation_data = generate_tag_explanation(tag['name'])
+                enriched_tags.append({
+                    'name': tag['name'],
+                    'type': tag.get('type', 'Entity'),
+                    'explanation': explanation_data.get('explanation', '') if explanation_data else '',
+                    'takeaway': explanation_data.get('takeaway', '') if explanation_data else ''
+                })
+            
+            article_data = {
+                'title': item['title'],
+                'summary': item['summary'],
+                'source_url': item['source_url'],
+                'source': 'News Aggregator'
+            }
+            state_manager.save_article_with_tags(article_data, enriched_tags)
             
         logger.info("Sending Top 3 News to Telegram...")
         news_success = send_to_telegram(news_msg.strip())
@@ -70,7 +90,7 @@ def main():
     
     # 5. Output result & Save History
     if success and news_success:
-        state_manager.save_history(vocab_word, proverb_text)
+        state_manager.save_history(vocab_word, proverb_text, german_word)
         logger.info("Workflow completed successfully. History saved.")
     else:
         logger.error("Workflow finished with errors (Story or News Telegram failed).")

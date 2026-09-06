@@ -1,0 +1,104 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import os
+import sqlite3
+from typing import List, Optional
+
+from modules.state_manager import StateManager
+from logger import get_logger
+from apscheduler.schedulers.background import BackgroundScheduler
+import main as scraper_main
+
+logger = get_logger(__name__)
+
+app = FastAPI(title="InsightOrbit API")
+
+# Enable CORS for frontend development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    # Run the main automation script every day at 00:00 UTC (8:00 AM TW time)
+    scheduler.add_job(scraper_main.main, 'cron', hour=0, minute=0)
+    scheduler.start()
+    logger.info("Background scheduler started (cron set to 00:00 UTC).")
+
+state_manager = StateManager()
+
+# Mount templates/static directory
+templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
+if os.path.exists(templates_dir):
+    app.mount("/static", StaticFiles(directory=templates_dir), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    """Serve the InsightOrbit Demo Panel directly from root for easy access."""
+    panel_path = os.path.join(templates_dir, "insight_orbit_panel.html")
+    if os.path.exists(panel_path):
+        with open(panel_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>InsightOrbit API is running. Panel HTML not found.</h1>"
+
+@app.get("/api/today")
+async def get_today_orbit():
+    """
+    Get today's Top 3 news and their associated tags for the Level 1 Bubble View.
+    """
+    with state_manager._get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get the latest 3 articles
+        cursor.execute('''
+            SELECT id, title, summary, source_url, source_name, created_at
+            FROM articles
+            ORDER BY created_at DESC
+            LIMIT 3
+        ''')
+        articles_rows = cursor.fetchall()
+        
+        orbit_data = []
+        for row in articles_rows:
+            article = dict(row)
+            
+            # Fetch tags for this article
+            cursor.execute('''
+                SELECT t.name, t.tag_type
+                FROM tags t
+                JOIN article_tags at ON t.id = at.tag_id
+                WHERE at.article_id = ?
+            ''', (article['id'],))
+            
+            tags = [dict(t_row) for t_row in cursor.fetchall()]
+            article['tags'] = tags
+            orbit_data.append(article)
+            
+        return {"orbit": orbit_data}
+
+@app.get("/api/tags/{tag_name}")
+async def get_tag_detail(tag_name: str):
+    """
+    Get tag glossary and historical timeline for Level 3 Deep Dive.
+    """
+    details = state_manager.get_tag_details(tag_name)
+    if not details:
+        raise HTTPException(status_code=404, detail="Tag not found")
+        
+    return details
+
+if __name__ == "__main__":
+    import uvicorn
+    # Start the server on port defined by Render (default 8000)
+    port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Starting InsightOrbit API Server on port {port}...")
+    uvicorn.run("api_server:app", host="0.0.0.0", port=port, reload=False)

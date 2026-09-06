@@ -9,18 +9,19 @@ logger = get_logger(__name__)
 def format_daily_report(company_data, metrics, recent_history=None):
     """
     將公司基本資料與搜尋結果透過 LLM 整理為結構化的每日報告。
-    回傳 (post_draft, vocab_word, proverb_text)
-    若 LLM 呼叫失敗，將回傳 (None, None, None)。
+    回傳 (post_draft, vocab_word, proverb_text, german_word)
+    若 LLM 呼叫失敗，將回傳 (None, None, None, None)。
     """
     json_data = summarize_with_llm(company_data, metrics, recent_history)
     
     if not json_data:
-        return None, None, None
+        return None, None, None, None
         
     try:
         story = json_data.get("story", "")
         vocab = json_data.get("vocabulary", {})
         proverb = json_data.get("proverb", {})
+        german = json_data.get("german_vocab", {})
         
         # 1. 產生 Telegram 版的 Markdown 內容
         markdown_content = f"{story}\n\n"
@@ -28,6 +29,12 @@ def format_daily_report(company_data, metrics, recent_history=None):
         markdown_content += f"🔹 **{vocab.get('word', '')}** ({vocab.get('pos', '')}) /{vocab.get('pronunciation', '')}/\n"
         markdown_content += f"👉 釋義：\n{vocab.get('definition', '')}\n\n"
         markdown_content += f"👉 例句：{vocab.get('example', '')}\n\n"
+        
+        markdown_content += f"🇩🇪 **【德語小教室】**\n"
+        markdown_content += f"🔹 **{german.get('word', '')}** ({german.get('pos', '')}) /{german.get('pronunciation', '')}/\n"
+        markdown_content += f"👉 釋義：{german.get('definition', '')}\n\n"
+        markdown_content += f"👉 例句：{german.get('example', '')}\n\n"
+
         markdown_content += f"📜 **【今日商業/處世諺語】**\n"
         markdown_content += f"🔹 **{proverb.get('text', '')}**\n"
         markdown_content += f"👉 解析：{proverb.get('explanation', '')}\n"
@@ -59,6 +66,13 @@ def format_daily_report(company_data, metrics, recent_history=None):
                 <p>👉 <strong>例句：</strong><br>{vocab.get('example', '').replace(chr(10), '<br>')}</p>
             </div>
             
+            <div class="vocab-box">
+                <h2>🇩🇪 德語小教室</h2>
+                <p><span class="word">{german.get('word', '')}</span> <span class="pronunciation">({german.get('pos', '')}) /{german.get('pronunciation', '')}/</span></p>
+                <p>👉 <strong>釋義：</strong><br>{german.get('definition', '').replace(chr(10), '<br>')}</p>
+                <p>👉 <strong>例句：</strong><br>{german.get('example', '').replace(chr(10), '<br>')}</p>
+            </div>
+            
             <div class="proverb-box">
                 <h2>📜 今日商業/處世諺語</h2>
                 <p><span class="word">{proverb.get('text', '')}</span></p>
@@ -74,8 +88,8 @@ def format_daily_report(company_data, metrics, recent_history=None):
             f.write(html_content)
         logger.info(f"Generated HTML newsletter at {html_path}")
             
-        return markdown_content, vocab.get('word', ''), proverb.get('text', '')
+        return markdown_content, vocab.get('word', ''), proverb.get('text', ''), german.get('word', '')
         
     except Exception as e:
         logger.error(f"Error parsing LLM JSON output: {e}")
-        return None, None, None
+        return None, None, None, None

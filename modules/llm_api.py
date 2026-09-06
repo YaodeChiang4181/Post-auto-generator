@@ -23,13 +23,21 @@ class ProverbSchema(BaseModel):
     explanation: str = Field(description="解釋與由來")
     usage: str = Field(description="應用場景或如何與今日故事連結")
 
+class GermanVocabSchema(BaseModel):
+    word: str = Field(description="德文單字")
+    pos: str = Field(description="詞性 (例如: n., v., adj.)")
+    pronunciation: str = Field(description="音標")
+    definition: str = Field(description="釋義 (繁體中文)")
+    example: str = Field(description="例句 (附繁體中文翻譯)")
+
 class DailyReportSchema(BaseModel):
     story: str = Field(description="你的商業故事主文 (包含標題、條列重點、hashtag)")
     vocabulary: VocabularySchema = Field(description="今日商務單字")
     proverb: ProverbSchema = Field(description="今日商業/處世諺語")
+    german_vocab: GermanVocabSchema = Field(description="今日德語小教室單字")
 
 def get_system_prompt():
-    base_prompt = """你是一位專業的資訊整理助理。請將以下定時抓取的原始資訊，整理成結構清楚、適合手機閱讀的繁體中文linkedin風格的文章。同時，你需要從這篇商業故事中提煉出一個核心的「商業英語單字」與一句契合故事主軸的「商業/處世諺語」。
+    base_prompt = """你是一位專業的資訊整理助理。請將以下定時抓取的原始資訊，整理成結構清楚、適合手機閱讀的繁體中文linkedin風格的文章。同時，你需要從這篇商業故事中提煉出一個核心的「商業英語單字」、一句契合故事主軸的「商業/處世諺語」，以及一個相關的「德文單字」（作為德語小教室素材）。
 
 排版原則 (僅針對 story 欄位)：
 1. 給出清晰的核心標題
@@ -102,8 +110,9 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
         
         if recent_history:
             user_content += "【請避開以下近期已使用過的單字與諺語】\n"
-            user_content += f"已用單字：{', '.join(recent_history.get('vocab', []))}\n"
+            user_content += f"已用英文單字：{', '.join(recent_history.get('vocab', []))}\n"
             user_content += f"已用諺語：{', '.join(recent_history.get('proverb', []))}\n"
+            user_content += f"已用德文單字：{', '.join(recent_history.get('german', []))}\n"
         
         logger.info(f"正在呼叫 Gemini 彙整 {comp_name} 的資料...")
         
@@ -124,12 +133,17 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
         logger.error(f"呼叫 Gemini API 失敗 (或重試達上限): {e}")
         return None
 
+class TagSchema(BaseModel):
+    name: str = Field(description="標籤名稱 (如 TSMC, AI, CoWoS)")
+    type: str = Field(description="標籤類型 (例如: Entity, Tech, Macro, Concept)")
+
 class NewsItemSchema(BaseModel):
     rank: int = Field(description="排名 (1, 2, 3)")
     title: str = Field(description="精煉且吸引人的繁體中文商業標題")
     source_url: str = Field(description="該則新聞對應的原始連結")
     impact_reason: str = Field(description="用 1 句話（30 字以內）說明為何該事件具備重大商業影響力")
     summary: str = Field(description="80~130 字的精華脈絡摘要")
+    tags: list[TagSchema] = Field(description="萃取 3~5 個與此新聞高度相關的關鍵實體或概念標籤", min_length=3, max_length=5)
 
 class TopNewsSchema(BaseModel):
     top_news: list[NewsItemSchema] = Field(description="精選出的 Top 3 新聞列表", min_length=3, max_length=3)
@@ -174,7 +188,8 @@ def select_top_news_with_llm(candidates):
             f"{news_text_list}\n"
             "請仔細審視上述候選清單，執行以下動作：\n"
             "1. 依據系統指令的權重標準，選出今日最具商業影響力的 Top 3 重大事件（排序 1 至 3）。\n"
-            "2. 每則新聞輸出指定的 JSON 結構（rank, title, source_url, impact_reason, summary）。"
+            "2. 每則新聞輸出指定的 JSON 結構（rank, title, source_url, impact_reason, summary, tags）。\n"
+            "   - 針對 tags 欄位，請為每則新聞萃取 3~5 個關鍵字（例如公司名、關鍵技術、總經指標等），並歸類其 type。"
         )
         
         logger.info(f"正在呼叫 Gemini 篩選 Top 3 新聞 (候選數量: {len(candidates)})...")
@@ -196,4 +211,45 @@ def select_top_news_with_llm(candidates):
         
     except Exception as e:
         logger.error(f"呼叫 Gemini 篩選新聞失敗: {e}")
+        return None
+
+class TagExplanationSchema(BaseModel):
+    explanation: str = Field(description="150 字內的白話科普解釋")
+    takeaway: str = Field(description="一句話的商業洞察、市場影響或 Takeaway")
+
+def generate_tag_explanation(tag_name):
+    """
+    針對未知的商業/科技名詞生成 150 字內的白話科普與重點整理。
+    """
+    if not GEMINI_API_KEY:
+        logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行科普生成")
+        return None
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        system_prompt = (
+            "你是一位頂尖的科技商業分析師，擅長用極簡、白話的方式將硬核名詞解釋給非技術背景的投資人聽。\n"
+            "你的任務是針對使用者輸入的名詞（可能是技術、公司名、經濟指標），產出兩項內容：\n"
+            "1. 150 字內的精華科普 (Glossary)：講重點，不要說廢話。\n"
+            "2. 一句話的 Takeaway：點出它為什麼重要，或者目前的市場地位/影響力。"
+        )
+        
+        user_content = f"請解釋這個名詞：{tag_name}"
+        logger.info(f"正在呼叫 Gemini 生成科普解釋: {tag_name}")
+        
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=f"{system_prompt}\n\n{user_content}",
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": TagExplanationSchema,
+                "temperature": 0.3,
+            }
+        )
+        
+        return response.parsed.model_dump()
+        
+    except Exception as e:
+        logger.error(f"呼叫 Gemini 生成科普失敗 ({tag_name}): {e}")
         return None
