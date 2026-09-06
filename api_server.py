@@ -41,7 +41,7 @@ if os.path.exists(templates_dir):
     app.mount("/static", StaticFiles(directory=templates_dir), name="static")
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root():
+def read_root():
     """Serve the InsightOrbit Demo Panel directly from root for easy access."""
     panel_path = os.path.join(templates_dir, "insight_orbit_panel.html")
     if os.path.exists(panel_path):
@@ -50,7 +50,7 @@ async def read_root():
     return "<h1>InsightOrbit API is running. Panel HTML not found.</h1>"
 
 @app.get("/api/today")
-async def get_today_orbit():
+def get_today_orbit():
     """
     Get today's Top 3 news and their associated tags for the Level 1 Bubble View.
     """
@@ -85,7 +85,7 @@ async def get_today_orbit():
         return {"orbit": orbit_data}
 
 @app.get("/api/tags/{tag_name}")
-async def get_tag_detail(tag_name: str):
+def get_tag_detail(tag_name: str):
     """
     Get tag glossary and historical timeline for Level 3 Deep Dive.
     """
