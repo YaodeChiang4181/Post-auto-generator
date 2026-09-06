@@ -3,335 +3,356 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>InsightOrbit - Deep Dive Panel</title>
+    <title>InsightOrbit - Financial Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-        /* Hide scrollbar for clean UI */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        obsidian: '#0A0A0C',
+                        primaryRed: '#FF1E42',
+                        deepCrimson: '#4A0E17',
+                        orbitDark: '#120507',
+                        darkRed: '#2A080D'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'subtle-float': 'float 5s ease-in-out infinite',
+                        'subtle-float-delayed': 'float 6s ease-in-out infinite 1s',
+                        'subtle-float-slow': 'float 7s ease-in-out infinite 2s',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translate(-50%, -50%) translateY(0px)' },
+                            '50%': { transform: 'translate(-50%, -50%) translateY(-10px)' },
+                        }
+                    }
+                }
+            }
         }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+    </script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .bottom-sheet { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .bottom-sheet.dragging { transition: none; }
+        
+        .glass-orb {
+            background: linear-gradient(135deg, rgba(74, 14, 23, 0.8) 0%, rgba(0, 0, 0, 0.9) 100%);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 30, 66, 0.3);
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
         }
         
-        /* Draggable Bottom Sheet Transitions */
-        .bottom-sheet {
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        .glass-orb:hover {
+            border-color: #FF1E42;
         }
-        .bottom-sheet.dragging {
-            transition: none;
+
+        .orb-glow {
+            box-shadow: 0 0 35px rgba(230, 0, 40, 0.35);
+        }
+
+        .orbit-ring {
+            border: 1px solid rgba(42, 8, 13, 0.8);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .capsule {
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s;
         }
     </style>
 </head>
-<body class="bg-slate-100 overflow-hidden h-screen w-screen relative">
-    <!-- Dummy Background Map/Dashboard -->
-    <div class="absolute inset-0 flex items-center justify-center">
-        <h1 class="text-4xl font-bold text-slate-300">InsightOrbit Main Dashboard</h1>
-        <div class="absolute w-32 h-32 bg-blue-400 rounded-full opacity-20 blur-xl top-1/3 left-1/4"></div>
-        <div class="absolute w-48 h-48 bg-purple-400 rounded-full opacity-20 blur-xl bottom-1/4 right-1/3"></div>
-    </div>
-
-    <!-- React Root -->
+<body class="bg-obsidian text-gray-300 overflow-hidden h-screen w-screen relative font-sans">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback } = React;
+        const { useState, useEffect, useRef } = React;
 
-        const DeepDivePanel = () => {
-            const [history, setHistory] = useState([]);
-            const [loading, setLoading] = useState(false);
-            const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
-            const [cache, setCache] = useState({});
-            
-            // Mobile Sheet State
-            const [sheetState, setSheetState] = useState("closed"); // 'peek', 'expanded', 'full', 'closed'
-            const [dragY, setDragY] = useState(0);
-            const sheetRef = useRef(null);
-            const startY = useRef(0);
-            const currentY = useRef(0);
-            const isDragging = useRef(false);
-
-            // Fetch Top News for dashboard integration (mock background)
+        const DashboardHeader = () => {
+            const [time, setTime] = useState("");
             useEffect(() => {
-                const fetchToday = async () => {
-                    try {
-                        const res = await fetch('/api/today');
-                        const data = await res.json();
-                        console.log("Today orbit:", data);
-                        // In a real app, render bubbles here. For now we just load the first tag of the first article
-                        if (data.orbit && data.orbit.length > 0 && data.orbit[0].tags.length > 0) {
-                            navigateTo(data.orbit[0].tags[0].name);
-                        }
-                    } catch (e) {
-                        console.error("API error", e);
-                    }
+                const update = () => {
+                    const now = new Date();
+                    const tomorrow = new Date();
+                    tomorrow.setHours(24,0,0,0);
+                    const diff = tomorrow - now;
+                    const h = Math.floor(diff / 3600000);
+                    const m = Math.floor((diff % 3600000) / 60000);
+                    setTime(`T-${h}H ${m}M`);
                 };
-                fetchToday();
+                update();
+                const timer = setInterval(update, 60000);
+                return () => clearInterval(timer);
             }, []);
 
-            const currentId = history[history.length - 1];
-            const data = cache[currentId];
+            return (
+                <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-40 pointer-events-none">
+                    <h1 className="text-white font-bold tracking-widest uppercase text-sm">Orbit of {new Date().toISOString().split('T')[0]}</h1>
+                    <div className="text-primaryRed font-mono text-sm tracking-wider">NEXT SYNC {time}</div>
+                </div>
+            );
+        };
 
-            // Handle Resize
+        const OrbitBackground = () => (
+            <div className="absolute inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+                <div className="orbit-ring w-[40vw] h-[40vw] min-w-[300px] min-h-[300px] max-w-[500px] max-h-[500px]"></div>
+                <div className="orbit-ring w-[60vw] h-[60vw] min-w-[500px] min-h-[500px] max-w-[800px] max-h-[800px]"></div>
+                <div className="orbit-ring w-[80vw] h-[80vw] min-w-[700px] min-h-[700px] max-w-[1100px] max-h-[1100px]"></div>
+            </div>
+        );
+
+        const DeepDivePanel = ({ tag, cache, setCache, onClose }) => {
+            const [data, setData] = useState(cache[tag]);
+            const [loading, setLoading] = useState(!cache[tag]);
+            const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+
             useEffect(() => {
                 const handleResize = () => setIsDesktop(window.innerWidth >= 768);
                 window.addEventListener('resize', handleResize);
                 return () => window.removeEventListener('resize', handleResize);
             }, []);
 
-            const navigateTo = async (tag) => {
-                setLoading(true);
-                
+            useEffect(() => {
                 if (!cache[tag]) {
-                    try {
-                        const res = await fetch(`/api/tags/${encodeURIComponent(tag)}`);
-                        if (res.ok) {
-                            const tagData = await res.json();
-                            setCache(prev => ({ ...prev, [tag]: tagData }));
-                        }
-                    } catch (e) {
-                        console.error("Failed to fetch tag info", e);
-                    }
+                    setLoading(true);
+                    fetch(`/api/tags/${encodeURIComponent(tag)}`)
+                        .then(r => r.json())
+                        .then(d => {
+                            setCache(prev => ({...prev, [tag]: d}));
+                            setData(d);
+                            setLoading(false);
+                        });
                 }
-                
-                setHistory(prev => [...prev, tag]);
-                setLoading(false);
-                
-                if (!isDesktop && sheetState === 'closed') {
-                    setSheetState('expanded');
-                } else if (!isDesktop && sheetState === 'peek') {
-                    setSheetState('expanded');
-                }
-            };
+            }, [tag]);
 
-            const goBack = () => {
-                if (history.length > 1) {
-                    setHistory(prev => prev.slice(0, -1));
-                }
-            };
+            if (loading) return (
+                <div className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'items-end'}`}>
+                    <div className="absolute inset-0 bg-obsidian/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+                    <div className={`relative bg-obsidian border-l border-darkRed h-full ${isDesktop ? 'w-[480px] lg:w-[560px] animate-pulse' : 'w-full h-[65vh] rounded-t-3xl'}`}></div>
+                </div>
+            );
 
-            const closePanel = () => {
-                if (isDesktop) {
-                    // Trigger some external close logic if integrated
-                    console.log("Close panel");
-                } else {
-                    setSheetState("closed");
-                }
-            };
-
-            // Touch events for mobile sheet
-            const onTouchStart = (e) => {
-                isDragging.current = true;
-                startY.current = e.touches[0].clientY;
-                currentY.current = startY.current;
-            };
-
-            const onTouchMove = (e) => {
-                if (!isDragging.current) return;
-                const y = e.touches[0].clientY;
-                const delta = y - startY.current;
-                
-                // Allow drag down, resist drag up beyond full
-                if (sheetState === 'full' && delta < 0) {
-                    // Slight resistance if pulling up when already full
-                    setDragY(delta * 0.1);
-                    return;
-                }
-                
-                setDragY(delta);
-            };
-
-            const onTouchEnd = (e) => {
-                if (!isDragging.current) return;
-                isDragging.current = false;
-                
-                // crude velocity & threshold checks
-                if (dragY > 60) {
-                    // Dragged down
-                    if (sheetState === 'full') setSheetState('expanded');
-                    else if (sheetState === 'expanded') setSheetState('peek');
-                    else setSheetState('closed');
-                } else if (dragY < -60) {
-                    // Dragged up
-                    if (sheetState === 'peek') setSheetState('expanded');
-                    else if (sheetState === 'expanded') setSheetState('full');
-                }
-                
-                setDragY(0);
-            };
-
-            // Compute Mobile Styles
-            const getMobileTransform = () => {
-                if (isDesktop) return 'translateX(0)';
-                if (sheetState === 'closed') return 'translateY(100%)';
-                
-                let baseTranslate = '0';
-                if (sheetState === 'peek') baseTranslate = 'calc(100vh - 28vh)';
-                else if (sheetState === 'expanded') baseTranslate = 'calc(100vh - 65vh)';
-                else if (sheetState === 'full') baseTranslate = 'calc(100vh - 94vh)';
-
-                if (isDragging.current) {
-                    return `translateY(calc(${baseTranslate} + ${dragY}px))`;
-                }
-                return `translateY(${baseTranslate})`;
-            };
-
-            // Render Skeleton
-            if (loading) {
-                return (
-                    <div className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'items-end'}`}>
-                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"></div>
-                        <div className={`relative bg-white h-full shadow-2xl flex flex-col bottom-sheet ${isDesktop ? 'w-[480px] lg:w-[560px] animate-pulse' : 'w-full rounded-t-3xl h-[65vh] fixed bottom-0'}`}>
-                           <div className="p-6 space-y-6">
-                               <div className="h-8 bg-slate-200 rounded w-1/3"></div>
-                               <div className="h-24 bg-slate-200 rounded w-full"></div>
-                               <div className="h-4 bg-slate-200 rounded w-2/3"></div>
-                           </div>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (!isDesktop && sheetState === 'closed') return null;
-            if (!data && !loading) return null; // Avoid render if no data and not loading
-
+            if (!data) return null;
 
             return (
                 <div className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'items-end'}`}>
-                    {/* Backdrop */}
-                    <div 
-                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
-                        onClick={closePanel}
-                    ></div>
-
-                    {/* Panel */}
-                    <div 
-                        ref={sheetRef}
-                        className={`relative bg-white shadow-2xl flex flex-col bottom-sheet
-                            ${isDesktop ? 'h-full w-[480px] lg:w-[560px]' : 'w-full rounded-t-3xl h-[100vh] fixed bottom-0'}
-                            ${isDragging.current ? 'dragging' : ''}
-                        `}
-                        style={{ transform: getMobileTransform() }}
-                    >
-                        {/* Mobile Drag Handle */}
-                        {!isDesktop && (
-                            <div 
-                                className="w-full flex justify-center pt-3 pb-1 cursor-grab"
-                                onTouchStart={onTouchStart}
-                                onTouchMove={onTouchMove}
-                                onTouchEnd={onTouchEnd}
-                            >
-                                <div className="w-9 h-1 rounded-full bg-slate-300"></div>
-                            </div>
-                        )}
-
-                        {/* Header */}
-                        <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100 flex-shrink-0">
+                    <div className="absolute inset-0 bg-[#0A0A0C]/60 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+                    <div className={`relative bg-gradient-to-b from-[#120507] to-[#0A0A0C] border-l border-red-900/30 flex flex-col shadow-2xl ${isDesktop ? 'h-full w-[480px] lg:w-[560px]' : 'w-full rounded-t-3xl h-[85vh]'}`}>
+                        <div className="h-16 flex items-center justify-between px-6 border-b border-red-900/30">
                             <div className="flex items-center space-x-3">
-                                {history.length > 1 && (
-                                    <button onClick={goBack} className="text-slate-500 hover:text-slate-800 text-sm font-medium flex items-center">
-                                        ← Back
-                                    </button>
-                                )}
-                                <span className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700 bg-blue-50 rounded-md">
-                                    {data.type}
+                                <span className="px-2 py-1 text-xs font-mono tracking-wider text-primaryRed bg-red-950/40 border border-primaryRed/30 rounded">
+                                    {data.type ? data.type.toUpperCase() : 'ENTITY'}
                                 </span>
-                                <h2 className="text-xl font-bold text-slate-800">{data.title}</h2>
+                                <h2 className="text-xl font-bold text-white">{data.title}</h2>
                             </div>
-                            <div className="flex items-center space-x-2">
-                                <button className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-50" onClick={closePanel}>
-                                    ✕
-                                </button>
-                            </div>
+                            <button className="text-gray-400 hover:text-white" onClick={onClose}>✕</button>
                         </div>
-
-                        {/* Content Area */}
-                        <div className={`flex-1 px-6 py-5 space-y-8 overflow-y-auto no-scrollbar ${!isDesktop && sheetState !== 'full' ? 'overflow-hidden pointer-events-none' : ''}`}>
-                            
-                            {/* AI Glossary */}
+                        <div className="flex-1 px-6 py-5 overflow-y-auto no-scrollbar space-y-8">
                             <section>
-                                <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center">
-                                    <svg className="w-4 h-4 mr-2 text-purple-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9.5 4a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm1 11h-2v-6h2v6z"></path></svg>
-                                    AI Glossary
-                                </h3>
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <p className="text-slate-700 leading-relaxed text-sm">
-                                        {data.glossary}
-                                    </p>
-                                    <div className="mt-4 p-3 bg-blue-50/50 rounded-lg border border-blue-100/50">
-                                        <p className="text-sm text-blue-900 font-medium leading-snug">
-                                            <span className="mr-1">💡</span> {data.takeaway}
-                                        </p>
+                                <h3 className="text-sm font-mono text-gray-400 mb-3 uppercase">AI Glossary</h3>
+                                <div className="bg-red-950/10 p-4 rounded-xl border border-red-900/20">
+                                    <p className="text-gray-300 leading-relaxed text-sm">{data.glossary || data.explanation}</p>
+                                    <div className="mt-4 p-3 bg-red-950/40 rounded border border-red-500/20">
+                                        <p className="text-sm text-white font-medium leading-snug">💡 {data.takeaway}</p>
                                     </div>
                                 </div>
                             </section>
-
-                            {/* Entity Relations */}
                             <section>
-                                <h3 className="text-sm font-bold text-slate-900 mb-3">Related Context</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {data.tags && data.tags.map(tag => (
-                                        <button 
-                                            key={tag} 
-                                            onClick={() => navigateTo(tag)}
-                                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-full transition-colors"
-                                        >
-                                            #{tag}
-                                        </button>
-                                    ))}
-                                </div>
-                            </section>
-
-                            {/* Timeline */}
-                            <section>
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-bold text-slate-900">Historical Events</h3>
-                                    {data.timeline && data.timeline.length > 3 && (
-                                        <span className="text-xs text-blue-600 cursor-pointer">Show {data.timeline.length - 3} older events</span>
-                                    )}
-                                </div>
-                                {!data.timeline || data.timeline.length === 0 ? (
-                                    <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                                        <p className="text-slate-500 text-sm">First observed in today's orbit. Continuously monitoring.</p>
+                                <h3 className="text-sm font-mono text-gray-400 mb-4 uppercase">Historical Events</h3>
+                                {(!data.timeline || data.timeline.length === 0) ? (
+                                    <div className="text-center py-6 border border-dashed border-red-900/40 rounded-xl">
+                                        <p className="text-gray-500 text-sm">First observed in today's orbit.</p>
                                     </div>
                                 ) : (
-                                    <div className="relative border-l-2 border-slate-200 ml-3 space-y-6">
-                                        {data.timeline.slice(0, 3).map((event, idx) => (
-                                            <div key={idx} className="relative pl-6">
-                                                <div className={`absolute -left-[5px] top-1 w-2 h-2 rounded-full ${idx === 0 ? 'bg-blue-600 ring-4 ring-blue-50' : 'bg-white border-2 border-slate-300'}`}></div>
-                                                <div className="text-xs font-mono text-slate-500 mb-1">{event.date.substring(0, 10)}</div>
-                                                <h4 className="text-sm font-bold text-slate-800 mb-1">{event.headline}</h4>
-                                                <p className="text-sm text-slate-600 flex items-center justify-between">
-                                                    <span>{event.summary}</span>
-                                                    <a href={event.source} target="_blank" className="text-slate-400 hover:text-blue-500 ml-2">↗</a>
-                                                </p>
+                                    <div className="relative border-l border-red-900/50 ml-2 space-y-6">
+                                        {data.timeline.map((event, idx) => (
+                                            <div key={idx} className="relative pl-5">
+                                                <div className={`absolute -left-[4.5px] top-1 w-2 h-2 rounded-full ${idx===0 ? 'bg-primaryRed shadow-[0_0_10px_#FF1E42]' : 'bg-gray-600'}`}></div>
+                                                <div className="text-xs font-mono text-gray-500 mb-1">{event.date.substring(0,10)}</div>
+                                                <h4 className="text-sm font-bold text-white mb-1">{event.headline}</h4>
+                                                <p className="text-sm text-gray-400">{event.summary}</p>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                             </section>
-
                         </div>
-
-                        {/* Footer CTA (Full state) */}
-                        {(!isDesktop && sheetState === 'full' || isDesktop) && (
-                            <div className="p-4 border-t border-slate-100 bg-white">
-                                <button className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-colors">
-                                    View Full Encyclopedia Entry ↗
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </div>
             );
         };
 
+        const App = () => {
+            const [orbit, setOrbit] = useState([]);
+            const [activeArticle, setActiveArticle] = useState(null);
+            const [activeTag, setActiveTag] = useState(null);
+            const [cache, setCache] = useState({});
+            const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+
+            useEffect(() => {
+                fetch('/api/today')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.orbit) setOrbit(d.orbit);
+                    });
+                
+                const handleResize = () => setIsDesktop(window.innerWidth >= 768);
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+
+            // Desktop Triangle
+            const desktopCoords = [
+                { top: '35%', left: '50%' },
+                { top: '65%', left: '35%' },
+                { top: '65%', left: '65%' }
+            ];
+            // Mobile Vertical
+            const mobileCoords = [
+                { top: '25%', left: '50%' },
+                { top: '50%', left: '50%' },
+                { top: '75%', left: '50%' }
+            ];
+            const getCoords = (i) => isDesktop ? desktopCoords[i] : mobileCoords[i];
+            
+            // Anchor point when active
+            const activeCoords = isDesktop ? { top: '50%', left: '30%' } : { top: '15%', left: '50%' };
+            
+            const anims = ['animate-subtle-float', 'animate-subtle-float-delayed', 'animate-subtle-float-slow'];
+
+            const handleOrbClick = (article, e) => {
+                e.stopPropagation();
+                if (activeArticle === article) {
+                    setActiveArticle(null); // toggle off
+                } else {
+                    setActiveArticle(article);
+                }
+            };
+
+            const closeLevel2 = () => setActiveArticle(null);
+
+            return (
+                <div className="w-full h-full relative" onClick={closeLevel2}>
+                    <DashboardHeader />
+                    <OrbitBackground />
+                    
+                    {/* Level 2: Neural Beams & Capsules */}
+                    {activeArticle && (
+                        <div className="absolute inset-0 z-20 pointer-events-none">
+                            {/* Draw SVG lines first so they are under capsules */}
+                            <svg className="absolute inset-0 w-full h-full opacity-60">
+                                {activeArticle.tags.map((tag, idx) => {
+                                    const startX = isDesktop ? '30%' : '50%';
+                                    const startY = isDesktop ? '50%' : '15%';
+                                    const endX = isDesktop ? '60%' : '50%';
+                                    const endY = isDesktop ? `${30 + (idx * 15)}%` : `${35 + (idx * 15)}%`;
+                                    return (
+                                        <line 
+                                            key={`line-${idx}`}
+                                            x1={startX} y1={startY} x2={endX} y2={endY}
+                                            stroke="#FF1E42" strokeWidth="1.5" strokeDasharray="4 4"
+                                            className="animate-pulse"
+                                        />
+                                    );
+                                })}
+                            </svg>
+
+                            {/* Render Capsules */}
+                            {activeArticle.tags.map((tag, idx) => {
+                                const capTop = isDesktop ? `${30 + (idx * 15)}%` : `${35 + (idx * 15)}%`;
+                                const capLeft = isDesktop ? '60%' : '50%';
+                                // Apply type-based styling
+                                const t = (tag.type || '').toLowerCase();
+                                let capsuleClass = "border border-primaryRed/40 bg-red-950/80 hover:bg-primaryRed/20 text-white"; // default
+                                if (t === 'entity' || t === '機構' || t === '企業') {
+                                    capsuleClass = "bg-white text-black font-bold hover:bg-gray-200 border-white";
+                                } else if (t === 'market' || t === '變革') {
+                                    capsuleClass = "bg-primaryRed text-white font-bold hover:bg-red-500 border-primaryRed";
+                                }
+
+                                return (
+                                    <div 
+                                        key={tag.name}
+                                        onClick={(e) => { e.stopPropagation(); setActiveTag(tag.name); }}
+                                        className="absolute z-30 capsule cursor-pointer transform -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                                        style={{ top: capTop, left: capLeft }}
+                                    >
+                                        <div className={`px-4 py-2 rounded-full flex items-center space-x-2 transition-colors ${capsuleClass}`}>
+                                            {(t !== 'entity' && t !== '機構' && t !== '企業') && (
+                                                <div className="w-2 h-2 rounded-full bg-white"></div>
+                                            )}
+                                            <span className="text-sm tracking-wide">#{tag.name}</span>
+                                            <span className="opacity-70 text-xs font-mono ml-1">↗</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Level 1: Orbs */}
+                    {orbit.map((article, i) => {
+                        const isActive = activeArticle === article;
+                        const isFaded = activeArticle && !isActive;
+                        const coords = activeArticle ? (isActive ? activeCoords : getCoords(i)) : getCoords(i);
+                        
+                        return (
+                            <div 
+                                key={article.id}
+                                onClick={(e) => handleOrbClick(article, e)}
+                                className={`absolute z-30 glass-orb rounded-full flex flex-col items-center justify-center p-6 cursor-pointer transform transition-all duration-700
+                                    ${activeArticle ? '' : anims[i]}
+                                    ${isActive ? 'w-64 h-64 orb-glow' : 'w-56 h-56 hover:scale-105 hover:orb-glow'}
+                                    ${isFaded ? 'opacity-20 scale-75 pointer-events-none' : 'opacity-100'}
+                                `}
+                                style={{ top: coords.top, left: coords.left }}
+                            >
+                                <div className="text-primaryRed font-mono text-xs uppercase tracking-widest mb-2 font-bold bg-black/50 px-2 py-1 rounded">
+                                    [IMPACT // TOP {i+1}]
+                                </div>
+                                <h2 className="text-white font-bold text-lg text-center leading-snug line-clamp-3 w-full">
+                                    {article.title}
+                                </h2>
+                                {!isActive && (
+                                    <div className="mt-4 flex flex-wrap justify-center gap-1 opacity-60">
+                                        {article.tags.slice(0,2).map(t => (
+                                            <span key={t.name} className="text-[10px] text-gray-300 uppercase px-1 border border-gray-600 rounded">
+                                                {t.name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {/* Level 3: Drawer */}
+                    {activeTag && (
+                        <DeepDivePanel 
+                            tag={activeTag} 
+                            cache={cache} 
+                            setCache={setCache} 
+                            onClose={(e) => { if(e) e.stopPropagation(); setActiveTag(null); }} 
+                        />
+                    )}
+                </div>
+            );
+        };
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<DeepDivePanel />);
+        root.render(<App />);
     </script>
 </body>
 </html>
