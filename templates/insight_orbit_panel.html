@@ -32,6 +32,10 @@
                         float: {
                             '0%, 100%': { transform: 'translate(-50%, -50%) translateY(0px)' },
                             '50%': { transform: 'translate(-50%, -50%) translateY(-10px)' },
+                        },
+                        spinSlow: {
+                            'from': { transform: 'translate(-50%, -50%) rotate(0deg)' },
+                            'to': { transform: 'translate(-50%, -50%) rotate(360deg)' },
                         }
                     }
                 }
@@ -57,12 +61,23 @@
         }
 
         .orbit-ring {
-            border: 1px solid rgba(255, 42, 66, 0.15);
+            border: 1.5px dashed rgba(255, 42, 66, 0.25);
             border-radius: 50%;
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            animation: spinSlow 120s linear infinite;
+        }
+        
+        .orbit-ring:nth-child(2) {
+            animation-duration: 180s;
+            animation-direction: reverse;
+            border: 1px dashed rgba(255, 42, 66, 0.15);
+        }
+
+        .orbit-ring:nth-child(3) {
+            animation-duration: 240s;
+            border: 1px dashed rgba(255, 42, 66, 0.1);
         }
         
         .capsule {
@@ -96,7 +111,6 @@
             return (
                 <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-40 pointer-events-none">
                     <h1 className="text-white font-bold tracking-widest uppercase text-sm">Orbit of {new Date().toISOString().split('T')[0]}</h1>
-                    <div className="text-primaryRed font-mono text-sm tracking-wider">NEXT SYNC {time}</div>
                 </div>
             );
         };
@@ -149,7 +163,7 @@
                         <div className="h-16 flex items-center justify-between px-6 border-b border-red-900/30">
                             <div className="flex items-center space-x-3">
                                 <span className="px-2 py-1 text-xs font-mono tracking-wider text-primaryRed bg-red-950/40 border border-primaryRed/30 rounded">
-                                    {data.type ? data.type.toUpperCase() : 'ENTITY'}
+                                    {data.type ? data.type.toUpperCase() : 'TOPIC'}
                                 </span>
                                 <h2 className="text-xl font-bold text-white">{data.title}</h2>
                             </div>
@@ -253,7 +267,10 @@
                 }
             };
 
-            const closeLevel2 = () => setActiveArticle(null);
+            const closeLevel2 = () => {
+                if (activeTag) return;
+                setActiveArticle(null);
+            };
 
             return (
                 <div className="w-full h-full relative" onClick={closeLevel2}>
@@ -315,7 +332,7 @@
                                             {(t !== 'entity' && t !== '機構' && t !== '企業') && (
                                                 <div className="w-2 h-2 rounded-full bg-white"></div>
                                             )}
-                                            <span className="text-sm tracking-wide">#{tag.name}</span>
+                                            <span className="text-sm tracking-wide">{tag.name}</span>
                                             <span className="opacity-70 text-xs font-mono ml-1">↗</span>
                                         </div>
                                     </div>
@@ -334,8 +351,6 @@
                         const baseSize = isTop1 ? 'w-64 h-64 lg:w-72 lg:h-72' : 'w-52 h-52 lg:w-56 lg:h-56';
                         // Active size slightly shrunk by 10% (using Tailwind scale-90 or just smaller width)
                         const activeSize = 'w-56 h-56 lg:w-64 lg:h-64'; 
-                        
-                        const labelText = categoryLabels[i] || `[IMPACT // TOP ${i+1}]`;
 
                         return (
                             <div 
@@ -350,8 +365,8 @@
                                 style={{ top: coords.top, left: coords.left }}
                             >
                                 {/* External Label */}
-                                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-primaryRed font-mono text-[10px] lg:text-xs uppercase tracking-widest font-bold whitespace-nowrap">
-                                    {labelText}
+                                <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 text-primaryRed font-sans text-5xl lg:text-6xl font-black italic opacity-90 drop-shadow-[0_0_15px_rgba(255,42,66,0.8)]">
+                                    {i + 1}
                                 </div>
                                 
                                 <h2 className="text-white font-bold text-base lg:text-lg text-center leading-relaxed break-words w-full px-2 line-clamp-3" style={{ wordBreak: 'break-word' }}>
