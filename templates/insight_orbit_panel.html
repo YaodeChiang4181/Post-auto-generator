@@ -269,7 +269,7 @@
             const getCoords = (i) => isDesktop ? desktopCoords[i] : mobileCoords[i];
             
             // Anchor point when active (moved slightly left and slightly smaller)
-            const activeCoords = isDesktop ? { top: '50%', left: '25%' } : { top: '15%', left: '50%' };
+            const activeCoords = isDesktop ? { top: '50%', left: activeTag ? '15%' : '25%' } : { top: '15%', left: '50%' };
             
             const anims = ['animate-subtle-float', 'animate-subtle-float-delayed', 'animate-subtle-float-slow'];
             
@@ -313,11 +313,12 @@
                                 <svg className="absolute inset-0 w-full h-full opacity-80">
                                     {activeArticle.tags.map((tag, idx) => {
                                         // Emit from exact right edge (desktop) or bottom edge (mobile)
-                                        const startX = isDesktop ? 'calc(25% + 128px)' : '50%';
+                                        const startX = isDesktop ? (activeTag ? 'calc(15% + 128px)' : 'calc(25% + 128px)') : '50%';
                                         const startY = isDesktop ? '50%' : 'calc(20% + 112px)';
                                         
                                         // Terminate exactly at the left edge of the capsule container
-                                        const endX = isDesktop ? 'calc(55% - 60px)' : '50%';
+                                        const capLeftVal = activeTag ? 35 : 55;
+                                        const endX = isDesktop ? `calc(${capLeftVal}% - 60px)` : '50%';
                                         const endY = isDesktop ? `${30 + (idx * 15)}%` : `${45 + (idx * 12)}%`;
                                         
                                         return (
@@ -325,7 +326,7 @@
                                                 key={`line-${idx}`}
                                                 x1={startX} y1={startY} x2={endX} y2={endY}
                                                 stroke="#FF1744" strokeWidth="1" strokeDasharray="3 3"
-                                                className="animate-pulse"
+                                                className="animate-pulse transition-all duration-500 ease-out"
                                             />
                                         );
                                     })}
@@ -334,7 +335,7 @@
                                 {/* Render Capsules */}
                                 {activeArticle.tags.map((tag, idx) => {
                                     const capTop = isDesktop ? `${30 + (idx * 15)}%` : `${45 + (idx * 12)}%`;
-                                const capLeft = isDesktop ? '55%' : '50%';
+                                const capLeft = isDesktop ? (activeTag ? '35%' : '55%') : '50%';
                                 // Apply type-based styling
                                 const t = (tag.type || '').toLowerCase();
                                 let capsuleClass = "border border-gray-700 bg-obsidian hover:border-primaryRed text-white"; // default
@@ -370,7 +371,7 @@
                         const isFaded = activeArticle && !isActive;
                         
                         // Use fixed left rail logic for active state on desktop
-                        const desktopActive = { top: '50%', left: '25%' };
+                        const desktopActive = { top: '50%', left: activeTag ? '15%' : '25%' };
                         const mobileActive = { top: '20%', left: '50%' };
                         
                         const coords = activeArticle ? (isActive ? (isDesktop ? desktopActive : mobileActive) : getCoords(i)) : getCoords(i);
