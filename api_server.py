@@ -26,12 +26,8 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-def start_scheduler():
-    scheduler = BackgroundScheduler()
-    # Run the news automation script every day at 00:00 UTC (8:00 AM TW time)
-    scheduler.add_job(scraper_news.run, 'cron', hour=0, minute=0)
-    scheduler.start()
-    logger.info("Background scheduler started (cron set to 00:00 UTC).")
+def startup_event():
+    logger.info("InsightOrbit API Server started.")
 
 state_manager = StateManager()
 

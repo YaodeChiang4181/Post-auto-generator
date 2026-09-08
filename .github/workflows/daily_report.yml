@@ -33,18 +33,6 @@ jobs:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         python main.py
-
-    - name: 💾 Commit and Push SQLite State
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        # Add the database first to ensure it's tracked before diffing
-        git add data/state.db
-        if git diff --cached --quiet; then
-          echo "No changes to state database."
-        else
-          git commit -m "chore: auto-update state database"
-          git push
-        fi
