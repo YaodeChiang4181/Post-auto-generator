@@ -67,13 +67,21 @@ def main():
             # InsightOrbit: Generate tag explanations and save to DB
             enriched_tags = []
             for tag in item.get('tags', []):
-                explanation_data = generate_tag_explanation(tag['name'])
-                enriched_tags.append({
-                    'name': tag['name'],
-                    'type': tag.get('type', 'Entity'),
-                    'explanation': explanation_data.get('explanation', '') if explanation_data else '',
-                    'takeaway': explanation_data.get('takeaway', '') if explanation_data else ''
-                })
+                existing_tag = state_manager.get_tag_details(tag['name'])
+                if existing_tag and existing_tag.get('glossary') and existing_tag.get('related_keywords'):
+                    enriched_tags.append({
+                        'name': tag['name'],
+                        'type': existing_tag.get('type', tag.get('type', 'Entity'))
+                    })
+                else:
+                    explanation_data = generate_tag_explanation(tag['name'])
+                    enriched_tags.append({
+                        'name': tag['name'],
+                        'type': tag.get('type', 'Entity'),
+                        'explanation': explanation_data.get('explanation', '') if explanation_data else '',
+                        'takeaway': explanation_data.get('takeaway', '') if explanation_data else '',
+                        'related_keywords': explanation_data.get('related_keywords', []) if explanation_data else []
+                    })
             
             article_data = {
                 'title': item['title'],
