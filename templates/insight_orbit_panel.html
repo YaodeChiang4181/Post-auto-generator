@@ -52,8 +52,14 @@
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         
-        .glass-orb:hover, .glass-orb.active-orb {
+        .glass-orb:hover {
             border: 1.5px solid #E3120B;
+        }
+
+        .glass-orb.active-orb {
+            border: 1.5px solid #E3120B;
+            background: #0D0D11;
+            box-shadow: 0 0 40px rgba(227, 18, 11, 0.15);
         }
 
         .orbit-ring {
