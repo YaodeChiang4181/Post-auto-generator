@@ -17,7 +17,19 @@ class StateManager:
         self._load_initial_data()
 
     def _get_connection(self):
-        return psycopg2.connect(self.db_url)
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # connect_timeout=15 ensures it doesn't hang indefinitely before retrying
+                return psycopg2.connect(self.db_url, connect_timeout=15)
+            except psycopg2.OperationalError as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Database connection failed (attempt {attempt+1}/{max_retries}), retrying in 5 seconds...")
+                    time.sleep(5)
+                else:
+                    logger.error("Failed to connect to the database after multiple attempts.")
+                    raise
 
     def _init_db(self):
         """Initialize the PostgreSQL database schema."""
