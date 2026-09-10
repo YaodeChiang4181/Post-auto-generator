@@ -178,7 +178,7 @@
             if (loading) return (
                 <div className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'items-end'}`}>
                     <div className="absolute inset-0 bg-obsidian/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-                    <div className={`relative bg-obsidian border-l border-darkRed h-full ${isDesktop ? 'w-[480px] lg:w-[560px]' : 'w-full h-[65vh] rounded-t-3xl'} overflow-hidden`}>
+                    <div className={`relative bg-obsidian border-l border-darkRed h-full ${isDesktop ? 'w-[480px] lg:w-[560px]' : 'w-full h-[55vh] rounded-t-3xl border-t'} overflow-hidden`}>
                         <div className="absolute inset-0 p-6 flex flex-col space-y-8 animate-pulse">
                             <div className="h-16 border-b border-red-900/30 flex items-center space-x-3">
                                 <div className="w-16 h-6 bg-red-900/20 rounded-sm"></div>
@@ -209,8 +209,8 @@
 
             return (
                 <div 
-                    className={`fixed top-0 z-50 shadow-2xl transition-transform duration-300 ease-out bg-obsidian border-l border-red-900/30 flex flex-col
-                        ${isDesktop ? 'right-0 h-full w-[480px] lg:w-[560px]' : 'bottom-0 w-full h-[85vh] rounded-t-3xl'}
+                    className={`fixed z-50 shadow-2xl transition-transform duration-300 ease-out bg-obsidian border-red-900/30 flex flex-col
+                        ${isDesktop ? 'top-0 right-0 h-full w-[480px] lg:w-[560px] border-l' : 'bottom-0 w-full h-[55vh] rounded-t-3xl border-t'}
                     `}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -310,15 +310,15 @@
                 { top: '65%', left: '35%' },
                 { top: '65%', left: '65%' }
             ];
-            // Mobile Vertical
+            // Mobile Vertical (Staggered to prevent overlap)
             const mobileCoords = [
                 { top: '25%', left: '50%' },
-                { top: '50%', left: '50%' },
-                { top: '75%', left: '50%' }
+                { top: '52%', left: '35%' },
+                { top: '75%', left: '65%' }
             ];
             const getCoords = (i) => isDesktop ? desktopCoords[i] : mobileCoords[i];
             
-            // Anchor point when active (moved slightly left and slightly smaller)
+            // Anchor point when active
             const activeCoords = isDesktop ? { top: '50%', left: activeTag ? '15%' : '25%' } : { top: '15%', left: '50%' };
             
             const anims = ['animate-subtle-float', 'animate-subtle-float-delayed', 'animate-subtle-float-slow'];
@@ -362,14 +362,22 @@
                                 {/* Draw SVG lines first so they are under capsules */}
                                 <svg className="absolute inset-0 w-full h-full opacity-80">
                                     {activeArticle.tags.map((tag, idx) => {
-                                        // Emit from exact right edge (desktop) or bottom edge (mobile)
-                                        const startX = isDesktop ? (activeTag ? 'calc(15% + 128px)' : 'calc(25% + 128px)') : '50%';
-                                        const startY = isDesktop ? '50%' : 'calc(20% + 112px)';
+                                        const totalTags = activeArticle.tags.length;
+                                        const angleSpread = totalTags > 1 ? 90 / (totalTags - 1) : 0;
+                                        const angleDeg = totalTags > 1 ? 135 - (idx * angleSpread) : 90;
+                                        const angleRad = angleDeg * (Math.PI / 180);
+                                        const radius = 18; // 18vh radius
+                                        const mobileEndX = 50 + (Math.cos(angleRad) * 40); // 40vw spread
+                                        const mobileEndY = 20 + (Math.sin(angleRad) * radius);
                                         
-                                        // Terminate exactly at the left edge of the capsule container
+                                        // Emit from exact right edge (desktop) or bottom center (mobile)
+                                        const startX = isDesktop ? (activeTag ? 'calc(15% + 128px)' : 'calc(25% + 128px)') : '50%';
+                                        const startY = isDesktop ? '50%' : 'calc(20% + 80px)'; // 80px is approx half of active orb on mobile
+                                        
+                                        // Terminate exactly at the left edge of the capsule container (desktop) or center (mobile)
                                         const capLeftVal = activeTag ? 35 : 55;
-                                        const endX = isDesktop ? `calc(${capLeftVal}% - 60px)` : '50%';
-                                        const endY = isDesktop ? `${30 + (idx * 15)}%` : `${45 + (idx * 12)}%`;
+                                        const endX = isDesktop ? `calc(${capLeftVal}% - 60px)` : `${mobileEndX}%`;
+                                        const endY = isDesktop ? `${30 + (idx * 15)}%` : `${mobileEndY}%`;
                                         
                                         return (
                                             <line 
@@ -384,8 +392,16 @@
 
                                 {/* Render Capsules */}
                                 {activeArticle.tags.map((tag, idx) => {
-                                    const capTop = isDesktop ? `${30 + (idx * 15)}%` : `${45 + (idx * 12)}%`;
-                                const capLeft = isDesktop ? (activeTag ? '35%' : '55%') : '50%';
+                                    const totalTags = activeArticle.tags.length;
+                                    const angleSpread = totalTags > 1 ? 90 / (totalTags - 1) : 0;
+                                    const angleDeg = totalTags > 1 ? 135 - (idx * angleSpread) : 90;
+                                    const angleRad = angleDeg * (Math.PI / 180);
+                                    const radius = 18;
+                                    const mobileLeft = 50 + (Math.cos(angleRad) * 40);
+                                    const mobileTop = 20 + (Math.sin(angleRad) * radius);
+
+                                    const capTop = isDesktop ? `${30 + (idx * 15)}%` : `${mobileTop}%`;
+                                const capLeft = isDesktop ? (activeTag ? '35%' : '55%') : `${mobileLeft}%`;
                                 // Apply type-based styling
                                 const t = (tag.type || '').toLowerCase();
                                 let capsuleClass = "border border-gray-700 bg-obsidian hover:border-primaryRed text-white"; // default
@@ -427,8 +443,8 @@
                         const coords = activeArticle ? (isActive ? (isDesktop ? desktopActive : mobileActive) : getCoords(i)) : getCoords(i);
                         
                         const isTop1 = i === 0;
-                        const baseSize = isTop1 ? 'w-64 h-64 lg:w-72 lg:h-72' : 'w-52 h-52 lg:w-56 lg:h-56';
-                        const activeSize = 'w-56 h-56 lg:w-64 lg:h-64'; 
+                        const baseSize = isTop1 ? 'w-44 h-44 md:w-56 md:h-56 lg:w-72 lg:h-72' : 'w-36 h-36 md:w-48 md:h-48 lg:w-56 lg:h-56';
+                        const activeSize = 'w-40 h-40 md:w-48 md:h-48 lg:w-64 lg:h-64'; 
                         
                         const labelText = categoryLabels[i] || `TAG ${i+1}`;
 
@@ -436,7 +452,7 @@
                             <div 
                                 key={article.id}
                                 onClick={(e) => handleOrbClick(article, e)}
-                                className={`absolute z-30 group glass-orb rounded-full flex flex-col items-center justify-between p-7 cursor-pointer transition-all duration-300 ease-out
+                                className={`absolute z-30 group glass-orb rounded-full flex flex-col items-center justify-between p-4 md:p-7 cursor-pointer transition-all duration-300 ease-out
                                     -translate-x-1/2 -translate-y-1/2 ${isActive ? 'active-orb' : ''}
                                     ${activeArticle ? '' : anims[i]}
                                     ${isActive ? `${activeSize}` : `${baseSize} hover:scale-[1.03] hover:border-[#E3120B]`}
@@ -445,17 +461,17 @@
                                 style={{ top: coords.top, left: coords.left }}
                             >
                                 {/* 1. Internalized Category Badge */}
-                                <span className="text-[9px] lg:text-[10px] whitespace-nowrap font-mono tracking-widest text-slate-400 group-hover:text-primaryRed transition-colors uppercase mt-2">
+                                <span className="text-[8px] md:text-[9px] lg:text-[10px] whitespace-nowrap font-mono tracking-widest text-slate-400 group-hover:text-primaryRed transition-colors uppercase mt-1 md:mt-2">
                                     [ 0{i+1} // {labelText} ]
                                 </span>
                                 
                                 {/* 2. Adaptive Headline (Scales on Hover & Active) */}
-                                <div className="flex items-center justify-center flex-1 w-full px-2 text-center">
+                                <div className="flex items-center justify-center flex-1 w-full px-1 md:px-2 text-center">
                                     <h3 
                                         className={`text-white font-bold transition-all duration-200 ease-out
                                             ${isActive 
-                                                ? 'text-xs lg:text-sm line-clamp-none leading-relaxed' 
-                                                : 'text-base lg:text-lg line-clamp-2 leading-snug group-hover:text-xs group-hover:lg:text-sm group-hover:line-clamp-none group-hover:leading-relaxed'}
+                                                ? 'text-[10px] md:text-xs lg:text-sm line-clamp-none leading-relaxed' 
+                                                : 'text-xs md:text-base lg:text-lg line-clamp-2 md:line-clamp-3 leading-snug group-hover:text-[10px] group-hover:md:text-xs group-hover:lg:text-sm group-hover:line-clamp-none group-hover:leading-relaxed'}
                                         `}
                                         style={{ wordBreak: 'break-word' }}
                                     >
