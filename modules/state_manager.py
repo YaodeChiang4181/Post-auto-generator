@@ -254,8 +254,8 @@ class StateManager:
                 for a in articles:
                     a['date'] = a['date'].isoformat() if a['date'] else ''
                 
-                related_keywords = []
-                if tag_data.get('related_keywords'):
+                related_keywords = None
+                if tag_data.get('related_keywords') is not None:
                     try:
                         related_keywords = json.loads(tag_data['related_keywords'])
                     except:

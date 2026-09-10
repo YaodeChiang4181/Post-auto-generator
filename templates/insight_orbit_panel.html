@@ -343,6 +343,15 @@
                 } else {
                     setActiveArticle(article);
                     setActiveTag(null);
+                    // Background trigger to prefetch deep tags for Layer 3 & 4
+                    if (article.tags && article.tags.length > 0) {
+                        const tagNames = article.tags.map(t => t.name);
+                        fetch('/api/prefetch_deep_tags', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tags: tagNames })
+                        }).catch(err => console.error("Prefetch failed", err));
+                    }
                 }
             };
 

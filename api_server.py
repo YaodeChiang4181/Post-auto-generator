@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -115,7 +115,7 @@ def get_tag_detail(tag_name: str):
             raise HTTPException(status_code=404, detail="Tag not found and failed to auto-generate")
         
     # Backfill logic for old tags without related_keywords
-    elif not details.get('related_keywords'):
+    elif details.get('related_keywords') is None:
         from modules.llm_api import generate_tag_explanation
         import json
         logger.info(f"Tag '{tag_name}' is missing related_keywords. Regenerating...")
@@ -135,6 +135,43 @@ def get_tag_detail(tag_name: str):
             details['related_keywords'] = new_data.get('related_keywords', [])
             
     return details
+
+class TagListRequest(BaseModel):
+    tags: List[str]
+
+@app.post("/api/prefetch_deep_tags")
+def prefetch_deep_tags(request: TagListRequest, background_tasks: BackgroundTasks):
+    """
+    Background fetch explanation and related keywords for deeper tags.
+    """
+    def fetch_tags(tags: List[str]):
+        from modules.llm_api import generate_tag_explanation
+        import json
+        for t in tags:
+            details = state_manager.get_tag_details(t)
+            if not details or details.get('related_keywords') is None:
+                logger.info(f"Background prefetching deep tag: '{t}'")
+                new_data = generate_tag_explanation(t)
+                if new_data:
+                    with state_manager._get_connection() as conn:
+                        with conn.cursor() as cursor:
+                            if not details:
+                                cursor.execute('''
+                                    INSERT INTO tags (name, tag_type, explanation, takeaway, related_keywords)
+                                    VALUES (%s, %s, %s, %s, %s)
+                                    ON CONFLICT (name) DO NOTHING
+                                ''', (t, 'Concept', new_data.get('explanation', ''), new_data.get('takeaway', ''), json.dumps(new_data.get('related_keywords', []))))
+                            else:
+                                cursor.execute('''
+                                    UPDATE tags SET explanation = %s, takeaway = %s, related_keywords = %s WHERE name = %s
+                                ''', (new_data.get('explanation', details.get('glossary', '')), 
+                                      new_data.get('takeaway', details.get('takeaway', '')), 
+                                      json.dumps(new_data.get('related_keywords', [])), 
+                                      t))
+                        conn.commit()
+
+    background_tasks.add_task(fetch_tags, request.tags)
+    return {"status": "prefetching started"}
 
 if __name__ == "__main__":
     import uvicorn

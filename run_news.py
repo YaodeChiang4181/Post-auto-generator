@@ -29,22 +29,27 @@ def run():
             
             # InsightOrbit: Generate tag explanations and save to DB
             enriched_tags = []
+            all_related_keywords = []
+            
             for tag in item.get('tags', []):
                 existing_tag = state_manager.get_tag_details(tag['name'])
-                if existing_tag and existing_tag.get('glossary') and existing_tag.get('related_keywords'):
+                if existing_tag and existing_tag.get('glossary') and existing_tag.get('related_keywords') is not None:
                     enriched_tags.append({
                         'name': tag['name'],
                         'type': existing_tag.get('type', tag.get('type', 'Entity'))
                     })
+                    all_related_keywords.extend(existing_tag.get('related_keywords', []))
                 else:
                     explanation_data = generate_tag_explanation(tag['name'])
+                    rel_kws = explanation_data.get('related_keywords', []) if explanation_data else []
                     enriched_tags.append({
                         'name': tag['name'],
                         'type': tag.get('type', 'Entity'),
                         'explanation': explanation_data.get('explanation', '') if explanation_data else '',
                         'takeaway': explanation_data.get('takeaway', '') if explanation_data else '',
-                        'related_keywords': explanation_data.get('related_keywords', []) if explanation_data else []
+                        'related_keywords': rel_kws
                     })
+                    all_related_keywords.extend(rel_kws)
             
             article_data = {
                 'title': item['title'],
@@ -53,6 +58,30 @@ def run():
                 'source': 'News Aggregator'
             }
             state_manager.save_article_with_tags(article_data, enriched_tags)
+            
+            # Pre-generate Layer 3 tags (Drawer keywords)
+            unique_kws = list(set(all_related_keywords))
+            if unique_kws:
+                logger.info(f"Pre-fetching {len(unique_kws)} Layer 3 related keywords...")
+                for kw in unique_kws:
+                    kw_details = state_manager.get_tag_details(kw)
+                    if not kw_details or kw_details.get('related_keywords') is None:
+                        kw_exp = generate_tag_explanation(kw)
+                        if kw_exp:
+                            import json
+                            with state_manager._get_connection() as conn:
+                                with conn.cursor() as cursor:
+                                    if not kw_details:
+                                        cursor.execute('''
+                                            INSERT INTO tags (name, tag_type, explanation, takeaway, related_keywords)
+                                            VALUES (%s, %s, %s, %s, %s)
+                                            ON CONFLICT (name) DO NOTHING
+                                        ''', (kw, 'Concept', kw_exp.get('explanation', ''), kw_exp.get('takeaway', ''), json.dumps(kw_exp.get('related_keywords', []))))
+                                    else:
+                                        cursor.execute('''
+                                            UPDATE tags SET explanation = %s, takeaway = %s, related_keywords = %s WHERE name = %s
+                                        ''', (kw_exp.get('explanation', ''), kw_exp.get('takeaway', ''), json.dumps(kw_exp.get('related_keywords', [])), kw))
+                                conn.commit()
             
         logger.info("Sending Top 3 News to Telegram...")
         news_success = send_to_telegram(news_msg.strip())
