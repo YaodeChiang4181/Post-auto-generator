@@ -362,22 +362,15 @@
                                 {/* Draw SVG lines first so they are under capsules */}
                                 <svg className="absolute inset-0 w-full h-full opacity-80">
                                     {activeArticle.tags.map((tag, idx) => {
-                                        const totalTags = activeArticle.tags.length;
-                                        const angleSpread = totalTags > 1 ? 90 / (totalTags - 1) : 0;
-                                        const angleDeg = totalTags > 1 ? 135 - (idx * angleSpread) : 90;
-                                        const angleRad = angleDeg * (Math.PI / 180);
-                                        const radius = 18; // 18vh radius
-                                        const mobileEndX = 50 + (Math.cos(angleRad) * 40); // 40vw spread
-                                        const mobileEndY = 20 + (Math.sin(angleRad) * radius);
+                                        const mobileLeft = idx % 2 === 0 ? 25 : 75;
+                                        const mobileTop = 36 + (idx * 9);
                                         
-                                        // Emit from exact right edge (desktop) or bottom center (mobile)
-                                        const startX = isDesktop ? (activeTag ? 'calc(15% + 128px)' : 'calc(25% + 128px)') : '50%';
-                                        const startY = isDesktop ? '50%' : 'calc(20% + 80px)'; // 80px is approx half of active orb on mobile
+                                        // Emit from exact center to avoid calc() issues in SVG attributes on iOS Safari
+                                        const startX = isDesktop ? (activeTag ? '15%' : '25%') : '50%';
+                                        const startY = isDesktop ? '50%' : '20%';
                                         
-                                        // Terminate exactly at the left edge of the capsule container (desktop) or center (mobile)
-                                        const capLeftVal = activeTag ? 35 : 55;
-                                        const endX = isDesktop ? `calc(${capLeftVal}% - 60px)` : `${mobileEndX}%`;
-                                        const endY = isDesktop ? `${30 + (idx * 15)}%` : `${mobileEndY}%`;
+                                        const endX = isDesktop ? (activeTag ? '35%' : '55%') : `${mobileLeft}%`;
+                                        const endY = isDesktop ? `${30 + (idx * 15)}%` : `${mobileTop}%`;
                                         
                                         return (
                                             <line 
@@ -392,16 +385,11 @@
 
                                 {/* Render Capsules */}
                                 {activeArticle.tags.map((tag, idx) => {
-                                    const totalTags = activeArticle.tags.length;
-                                    const angleSpread = totalTags > 1 ? 90 / (totalTags - 1) : 0;
-                                    const angleDeg = totalTags > 1 ? 135 - (idx * angleSpread) : 90;
-                                    const angleRad = angleDeg * (Math.PI / 180);
-                                    const radius = 18;
-                                    const mobileLeft = 50 + (Math.cos(angleRad) * 40);
-                                    const mobileTop = 20 + (Math.sin(angleRad) * radius);
+                                    const mobileLeft = idx % 2 === 0 ? 25 : 75;
+                                    const mobileTop = 36 + (idx * 9);
 
                                     const capTop = isDesktop ? `${30 + (idx * 15)}%` : `${mobileTop}%`;
-                                const capLeft = isDesktop ? (activeTag ? '35%' : '55%') : `${mobileLeft}%`;
+                                    const capLeft = isDesktop ? (activeTag ? '35%' : '55%') : `${mobileLeft}%`;
                                 // Apply type-based styling
                                 const t = (tag.type || '').toLowerCase();
                                 let capsuleClass = "border border-gray-700 bg-obsidian hover:border-primaryRed text-white"; // default
@@ -422,7 +410,7 @@
                                             {(t !== 'entity' && t !== '機構' && t !== '企業') && (
                                                 <div className="w-1.5 h-1.5 bg-current"></div>
                                             )}
-                                            <span className="text-sm tracking-wide font-mono">{tag.name}</span>
+                                            <span className="text-sm tracking-wide font-mono whitespace-nowrap">{tag.name}</span>
                                             <span className="opacity-50 text-xs font-mono ml-1">↗</span>
                                         </div>
                                     </div>
