@@ -255,3 +255,57 @@ def generate_tag_explanation(tag_name):
     except Exception as e:
         logger.error(f"呼叫 Gemini 生成科普失敗 ({tag_name}): {e}")
         return None
+
+class FinanceTermSchema(BaseModel):
+    focus_term: str = Field(description="今日焦點名詞 (中英對照名稱，附常見簡稱。一句話定錨，用生活直覺比喻破題)")
+    news_context: str = Field(description="新聞發生了什麼事？ (提取今日新聞情境，說明為什麼今天這個名詞會成為焦點或被頻繁提及)")
+    simple_explanation: str = Field(description="3 分鐘白話降維解析 (核心原理、運作機制、常見盲點)")
+    impact: list[str] = Field(description="對投資人 / 一般大眾的實質影響 (2-3 點連帶牽動)")
+    takeaway_quote: str = Field(description="主編金句 / 知識外賣 (適合社群轉發或電子報收尾的洞察金句)")
+
+def generate_finance_term(news_context, target_term="", recent_history=None):
+    """
+    呼叫 Gemini 產生專業金融詞彙解析
+    """
+    if not GEMINI_API_KEY:
+        logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行金融名詞解析")
+        return None
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        system_prompt = (
+            "你是一位資深財經新聞主編與金融行銷專家。你的任務是為每日財經電子報撰寫一檔「今日金融名詞拆解」專欄。\n"
+            "請以生動、無學術包袱但精準的語調，將專業名詞化為大眾好理解的商業智慧。\n\n"
+            "【寫作規範與語氣】\n"
+            "- 避免照搬維基百科或教科書定義，拒絕生硬術語堆疊。\n"
+            "- 專名詞初次出現請附英文原文。\n"
+            "- 保持專業、敏銳且帶有洞察力的商業敘事語調。"
+        )
+        
+        user_content = f"當日新聞脈絡/事件故事：\n{news_context}\n\n"
+        if target_term:
+            user_content += f"指定名詞：{target_term}\n"
+        else:
+            user_content += "指定名詞：請自行從上述新聞中挑選最關鍵的金融名詞\n"
+            
+        if recent_history and recent_history.get("finance_term"):
+            user_content += "\n【請避開以下近期已解析過的金融名詞】：\n"
+            user_content += ", ".join(recent_history["finance_term"]) + "\n"
+            
+        logger.info("正在呼叫 Gemini 生成專業金融詞彙解析...")
+        
+        full_prompt = f"{system_prompt}\n\n{user_content}"
+        
+        response = _call_gemini_with_retry(
+            client=client,
+            full_prompt=full_prompt,
+            response_schema=FinanceTermSchema,
+            temperature=0.6
+        )
+        
+        return response.parsed.model_dump()
+        
+    except Exception as e:
+        logger.error(f"呼叫 Gemini 生成專業金融詞彙解析失敗: {e}")
+        return None

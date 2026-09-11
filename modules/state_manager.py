@@ -148,7 +148,7 @@ class StateManager:
                 ''', (cutoff,))
                 rows = cursor.fetchall()
                 
-                history = {"vocab": [], "proverb": [], "german": []}
+                history = {"vocab": [], "proverb": [], "german": [], "finance_term": []}
                 for row in rows:
                     if row[0] == 'vocab':
                         history["vocab"].append(row[1])
@@ -156,11 +156,13 @@ class StateManager:
                         history["proverb"].append(row[1])
                     elif row[0] == 'german':
                         history["german"].append(row[1])
+                    elif row[0] == 'finance_term':
+                        history["finance_term"].append(row[1])
                         
                 return history
 
-    def save_history(self, vocab, proverb, german=None):
-        """Save a new vocabulary, proverb and german word to the history."""
+    def save_history(self, vocab=None, proverb=None, german=None, finance_term=None):
+        """Save a new vocabulary, proverb, german word, or finance term to the history."""
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 now = datetime.now()
@@ -179,8 +181,13 @@ class StateManager:
                         'INSERT INTO vocabulary_history (type, content, created_at) VALUES (%s, %s, %s)',
                         ('german', german, now)
                     )
+                if finance_term:
+                    cursor.execute(
+                        'INSERT INTO vocabulary_history (type, content, created_at) VALUES (%s, %s, %s)',
+                        ('finance_term', finance_term, now)
+                    )
             conn.commit()
-            logger.info(f"Saved vocabulary '{vocab}', proverb '{proverb}' and german '{german}' to history.")
+            logger.info(f"Saved vocabulary '{vocab}', proverb '{proverb}', german '{german}', finance_term '{finance_term}' to history.")
 
     # --- InsightOrbit Methods ---
     def save_article_with_tags(self, article, tags_info):
@@ -270,3 +277,21 @@ class StateManager:
                     "tags": [tag_data['name']],
                     "timeline": articles
                 }
+
+    def get_todays_news_context(self):
+        """Fetch the latest 3 articles to use as news context."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute('''
+                    SELECT title, summary, source_url 
+                    FROM articles
+                    ORDER BY created_at DESC
+                    LIMIT 3
+                ''')
+                rows = cursor.fetchall()
+                if not rows:
+                    return None
+                context_str = ""
+                for idx, row in enumerate(rows):
+                    context_str += f"[{idx+1}] {row['title']}\n摘要：{row['summary']}\n連結：{row['source_url']}\n\n"
+                return context_str.strip()
