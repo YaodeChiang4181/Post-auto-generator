@@ -63,7 +63,7 @@ def get_system_prompt():
     wait=wait_exponential(multiplier=2, min=4, max=60),
     reraise=True
 )
-def _call_gemini_with_retry(client, full_prompt):
+def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
     """
     實際呼叫 API 的內部函數，若發生暫時性錯誤 (如 503) 會自動重試。
     """
@@ -72,8 +72,8 @@ def _call_gemini_with_retry(client, full_prompt):
         contents=full_prompt,
         config={
             "response_mime_type": "application/json",
-            "response_schema": DailyReportSchema,
-            "temperature": 0.7,
+            "response_schema": response_schema,
+            "temperature": temperature,
         }
     )
     return response
@@ -120,7 +120,12 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
         full_prompt = f"{get_system_prompt()}\n\n{user_content}"
         
         # 呼叫重試機制
-        response = _call_gemini_with_retry(client, full_prompt)
+        response = _call_gemini_with_retry(
+            client=client, 
+            full_prompt=full_prompt, 
+            response_schema=DailyReportSchema, 
+            temperature=0.7
+        )
         
         # response.parsed returns the populated Pydantic object
         report: DailyReportSchema = response.parsed
@@ -196,14 +201,11 @@ def select_top_news_with_llm(candidates):
         
         full_prompt = f"{system_prompt}\n\n{user_content}"
         
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=full_prompt,
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": TopNewsSchema,
-                "temperature": 0.5,
-            }
+        response = _call_gemini_with_retry(
+            client=client,
+            full_prompt=full_prompt,
+            response_schema=TopNewsSchema,
+            temperature=0.5
         )
         
         report: TopNewsSchema = response.parsed
@@ -240,14 +242,12 @@ def generate_tag_explanation(tag_name):
         user_content = f"請解釋這個名詞：{tag_name}"
         logger.info(f"正在呼叫 Gemini 生成科普解釋: {tag_name}")
         
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=f"{system_prompt}\n\n{user_content}",
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": TagExplanationSchema,
-                "temperature": 0.3,
-            }
+        full_prompt = f"{system_prompt}\n\n{user_content}"
+        response = _call_gemini_with_retry(
+            client=client,
+            full_prompt=full_prompt,
+            response_schema=TagExplanationSchema,
+            temperature=0.3
         )
         
         return response.parsed.model_dump()
