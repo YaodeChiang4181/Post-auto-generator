@@ -44,6 +44,7 @@
 ## 執行與部署
 * **完整執行 (商業故事 + 新聞)**: 執行 `python main.py`
 * **僅執行新聞模組**: 執行 `python run_news.py`
+* **晚間金融名詞解析**: 執行 `python run_finance_term.py` (已設定 GitHub Actions 每日 18:07 執行)
 * **啟動 API 伺服器**: 執行 `python api_server.py`
 
 ## 環境變數 (.env)
@@ -54,4 +55,7 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **視覺化面板 UI 更新**: 於 InsightOrbit 前端介面的新聞圓圈 (Orbit) 展開狀態下，新增「跳轉看新聞」按鈕，允許使用者直接導向原始新聞網頁。
+* **晚間專業金融詞彙解析 (自動排程)**: 新增 `run_finance_term.py` 模組，透過 GitHub Actions 設定於台灣時間 18:07 自動觸發。系統會自動讀取當日新聞脈絡作為 LLM Prompt，並具備「防重複記憶機制」（記錄於資料庫 `vocabulary_history`），確保每日推送全新未解析過的金融術語。
+* **新聞來源擴充**: 將原本的 RSS 監測名單擴充，加入「經濟日報」、「Yahoo財經」、「The Wall Street Journal」與「CNN Markets」。
 * **API 穩定度升級**: 將原本僅用於「商業故事」模組的 Gemini API 自動重試機制 (`_call_gemini_with_retry`) 重構為通用架構，並擴大套用於「新聞 Top 3 篩選」與「標籤科普生成」等核心 LLM 呼叫。現在系統在面對尖峰時刻的 503 錯誤與網路延遲時，會自動採取指數退避 (Exponential Backoff) 策略進行至多 6 次重試，大幅提升了每日發文自動化的穩定度與抗壓性。
