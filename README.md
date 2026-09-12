@@ -17,12 +17,18 @@
 ### 2. 重大新聞快訊 Top 3 (InsightOrbit News Automation)
 * **核心檔案**: `main.py`, `run_news.py`, `modules/news_aggregator.py`, `modules/llm_api.py`
 * **目前監測新聞來源**:
+  * 鉅亨網
+  * 科技新報
+  * 數位時代
+  * BBC Business
+  * TechCrunch
+  * Google News (財經)
   * 經濟日報
   * Yahoo財經
   * The Wall Street Journal
   * CNN Markets
 * **運作流程**:
-  1. 透過 RSS 爬蟲抓取各大商業媒體的最新新聞。
+  1. 透過 RSS 爬蟲抓取各大商業/科技媒體的最新新聞。
   2. **時間過濾**：篩選出過去 24 小時內發布的新聞。
   3. 呼叫 LLM 從候選新聞中精選出 Top 3，並自動生成摘要、關鍵影響與分類標籤 (Tags)。
   4. 針對標籤呼叫 LLM 生成深度科普知識 (Glossary/Takeaway)，將結構化資料儲存至 SQLite 資料庫。

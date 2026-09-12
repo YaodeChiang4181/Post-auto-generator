@@ -8,11 +8,19 @@ from logger import get_logger
 logger = get_logger(__name__)
 
 RSS_FEEDS = [
+    # 原有的來源
+    {"name": "鉅亨網", "url": "https://rss.cnyes.com/news/cat/headline"},
+    {"name": "科技新報", "url": "https://technews.tw/feed/"},
+    {"name": "數位時代", "url": "https://www.bnext.com.tw/rss"},
+    {"name": "BBC Business", "url": "https://feeds.bbci.co.uk/news/business/rss.xml"},
+    {"name": "TechCrunch", "url": "https://techcrunch.com/feed/"},
+    {"name": "Google News (財經)", "url": "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=zh-TW&gl=TW&ceid=TW:zh-Hant"},
+    
+    # 新增的來源
     {"name": "經濟日報", "url": "https://money.udn.com/rssfeed/news/1001/5590"},
     {"name": "Yahoo財經", "url": "https://tw.news.yahoo.com/rss/finance"},
     {"name": "The Wall Street Journal", "url": "https://feeds.a.dj.com/rss/RSSWSJD.xml"},
     {"name": "CNN Markets", "url": "http://rss.cnn.com/rss/money_markets.rss"}
-    # 注意：MoneyDJ、天下雜誌與 Bloomberg 未提供公開的 RSS 服務或阻擋爬蟲，故暫不列入
 ]
 
 HEADERS = {
