@@ -482,13 +482,24 @@
                                     </h3>
                                 </div>
                                 
-                                {/* 3. Entity Pills (Bottom) */}
-                                <div className="flex gap-1.5 flex-wrap justify-center mb-2 opacity-100 transition-opacity duration-200">
-                                    {article.tags.slice(0, 2).map((t, idx) => (
-                                        <span key={idx} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-primaryRed text-white tracking-wide uppercase">
-                                            {t.name}
-                                        </span>
-                                    ))}
+                                {/* 3. Entity Pills & Action Button (Bottom) */}
+                                <div className="flex flex-col items-center gap-2 mb-2 w-full px-4 opacity-100 transition-opacity duration-200">
+                                    <div className="flex gap-1.5 flex-wrap justify-center">
+                                        {article.tags.slice(0, 2).map((t, idx) => (
+                                            <span key={idx} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-primaryRed text-white tracking-wide uppercase">
+                                                {t.name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    
+                                    {isActive && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); window.open(article.source_url, '_blank'); }}
+                                            className="mt-1 w-full max-w-[140px] py-1.5 bg-[#8b0000] hover:bg-primaryRed text-white text-xs font-bold tracking-widest rounded-sm transition-colors duration-300 z-50 pointer-events-auto border border-primaryRed"
+                                        >
+                                            跳轉看新聞
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         );
