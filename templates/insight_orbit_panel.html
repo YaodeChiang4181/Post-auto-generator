@@ -145,7 +145,7 @@
             );
         };
 
-        const DeepDivePanel = ({ tag, cache, setCache, onClose, setActiveTag }) => {
+        const DeepDivePanel = ({ tag, cache, setCache, onClose, setActiveTag, onEventClick }) => {
             const [data, setData] = useState(cache[tag]);
             const [loading, setLoading] = useState(!cache[tag]);
             const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
@@ -261,11 +261,15 @@
                                 ) : (
                                     <div className="relative border-l border-gray-700 ml-2 space-y-6">
                                         {data.timeline.map((event, idx) => (
-                                            <div key={idx} className="relative pl-5">
-                                                <div className={`absolute -left-[4.5px] top-1 w-2 h-2 rounded-full ${idx===0 ? 'bg-primaryRed' : 'bg-gray-600'}`}></div>
-                                                <div className="text-xs font-mono text-gray-500 mb-1">{event.date.substring(0,10)}</div>
-                                                <h4 className="text-sm font-bold text-white mb-1 leading-snug">{event.headline}</h4>
-                                                <p className="text-sm text-gray-400 leading-relaxed">{event.summary}</p>
+                                            <div 
+                                                key={idx} 
+                                                className="relative pl-5 py-2 cursor-pointer hover:bg-red-950/20 rounded-md transition-colors -ml-2"
+                                                onClick={() => onEventClick && onEventClick(event)}
+                                            >
+                                                <div className={`absolute left-[3.5px] top-3 w-2 h-2 rounded-full ${idx===0 ? 'bg-primaryRed' : 'bg-gray-600'}`}></div>
+                                                <div className="text-xs font-mono text-gray-500 mb-1 pl-2">{event.date.substring(0,10)}</div>
+                                                <h4 className="text-sm font-bold text-white mb-1 leading-snug pl-2">{event.headline}</h4>
+                                                <p className="text-sm text-gray-400 leading-relaxed pl-2">{event.summary}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -334,6 +338,32 @@
                 'SUPPLY CHAIN', 
                 'EQUITY'
             ];
+
+            const handleHistoricalEventClick = (event) => {
+                const pastArticle = {
+                    id: event.id,
+                    title: event.headline,
+                    summary: event.summary,
+                    source_url: event.source,
+                    created_at: event.date,
+                    tags: event.tags || []
+                };
+
+                setOrbit(prev => {
+                    if (prev.find(a => a.id === pastArticle.id)) return prev;
+                    let newOrbit = [...prev];
+                    const activeIndex = newOrbit.findIndex(a => a === activeArticle);
+                    if (activeIndex !== -1) {
+                        newOrbit[activeIndex] = pastArticle;
+                    } else {
+                        newOrbit = [pastArticle, ...newOrbit].slice(0, 3);
+                    }
+                    return newOrbit;
+                });
+                
+                setActiveArticle(pastArticle);
+                setActiveTag(null);
+            };
 
             const handleOrbClick = (article, e) => {
                 e.stopPropagation();
@@ -513,6 +543,7 @@
                             setCache={setCache} 
                             onClose={(e) => { if(e) e.stopPropagation(); setActiveTag(null); }} 
                             setActiveTag={setActiveTag}
+                            onEventClick={handleHistoricalEventClick}
                         />
                     )}
                 </div>

@@ -249,7 +249,7 @@ class StateManager:
                 
                 # Get Timeline (Historical Articles)
                 cursor.execute('''
-                    SELECT a.title as headline, a.summary, a.source_url as source, a.created_at as date
+                    SELECT a.id, a.title as headline, a.summary, a.source_url as source, a.created_at as date
                     FROM articles a
                     JOIN article_tags at ON a.id = at.article_id
                     WHERE at.tag_id = %s
@@ -257,8 +257,15 @@ class StateManager:
                 ''', (tag_data['id'],))
                 
                 articles = [dict(row) for row in cursor.fetchall()]
-                # Format dates
+                # Format dates and fetch tags for each historical article
                 for a in articles:
+                    cursor.execute('''
+                        SELECT t.name, t.tag_type as type
+                        FROM tags t
+                        JOIN article_tags at ON t.id = at.tag_id
+                        WHERE at.article_id = %s
+                    ''', (a['id'],))
+                    a['tags'] = [dict(t_row) for t_row in cursor.fetchall()]
                     a['date'] = a['date'].isoformat() if a['date'] else ''
                 
                 related_keywords = None
