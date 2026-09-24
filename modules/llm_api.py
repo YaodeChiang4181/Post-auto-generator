@@ -69,10 +69,12 @@ def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
     並加入「退而求其次」的模型累退嘗試邏輯。
     """
     models_to_try = [
-        "gemini-3.6-flash",  # 優先嘗試原本設定的模型
-        "gemini-2.0-flash",  # 新版高效能模型
-        "gemini-1.5-flash",  # 穩定且免費額度最高的模型
-        "gemini-1.5-pro"     # 備用 Pro 模型
+        "gemini-3.7-flash",  # 最新一代穩定模型，先嘗試
+        "gemini-3.8-flash",  # 較新模型，作為第一備用
+        "gemini-3.5-flash",  # 舊版模型，作為第二備用
+        "gemini-2.5-flash",  # 更舊版，第三備用
+        "gemini-flash-latest", # 動態指向最新模型
+        "gemini-3.6-flash"   # 原本設定的模型 (容易滿 20 次額度)
     ]
     
     last_exception = None
