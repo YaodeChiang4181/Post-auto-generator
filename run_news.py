@@ -1,6 +1,6 @@
 import sys
 from logger import get_logger
-from modules.llm_api import select_top_news_with_llm, generate_tag_explanation
+from modules.llm_api import select_top_news_with_llm, generate_tag_explanation, generate_tag_explanations_batch
 from modules.telegram_bot import send_to_telegram
 from modules.state_manager import StateManager
 from modules.news_aggregator import get_daily_news_candidates
@@ -31,6 +31,8 @@ def run():
             enriched_tags = []
             all_related_keywords = []
             
+            tags_to_generate = []
+            
             for tag in item.get('tags', []):
                 existing_tag = state_manager.get_tag_details(tag['name'])
                 if existing_tag and existing_tag.get('glossary') and existing_tag.get('related_keywords') is not None:
@@ -40,7 +42,14 @@ def run():
                     })
                     all_related_keywords.extend(existing_tag.get('related_keywords', []))
                 else:
-                    explanation_data = generate_tag_explanation(tag['name'])
+                    tags_to_generate.append(tag)
+                    
+            if tags_to_generate:
+                batch_explanations = generate_tag_explanations_batch([t['name'] for t in tags_to_generate])
+                expl_map = {ex['tag_name']: ex for ex in batch_explanations}
+                
+                for tag in tags_to_generate:
+                    explanation_data = expl_map.get(tag['name'])
                     rel_kws = explanation_data.get('related_keywords', []) if explanation_data else []
                     enriched_tags.append({
                         'name': tag['name'],
@@ -61,27 +70,33 @@ def run():
             
             # Pre-generate Layer 3 tags (Drawer keywords)
             unique_kws = list(set(all_related_keywords))
+            kws_to_generate = []
             if unique_kws:
-                logger.info(f"Pre-fetching {len(unique_kws)} Layer 3 related keywords...")
                 for kw in unique_kws:
                     kw_details = state_manager.get_tag_details(kw)
                     if not kw_details or kw_details.get('related_keywords') is None:
-                        kw_exp = generate_tag_explanation(kw)
-                        if kw_exp:
-                            import json
-                            with state_manager._get_connection() as conn:
-                                with conn.cursor() as cursor:
-                                    if not kw_details:
-                                        cursor.execute('''
-                                            INSERT INTO tags (name, tag_type, explanation, takeaway, related_keywords)
-                                            VALUES (%s, %s, %s, %s, %s)
-                                            ON CONFLICT (name) DO NOTHING
-                                        ''', (kw, 'Concept', kw_exp.get('explanation', ''), kw_exp.get('takeaway', ''), json.dumps(kw_exp.get('related_keywords', []))))
-                                    else:
-                                        cursor.execute('''
-                                            UPDATE tags SET explanation = %s, takeaway = %s, related_keywords = %s WHERE name = %s
-                                        ''', (kw_exp.get('explanation', ''), kw_exp.get('takeaway', ''), json.dumps(kw_exp.get('related_keywords', [])), kw))
-                                conn.commit()
+                        kws_to_generate.append(kw)
+                        
+            if kws_to_generate:
+                logger.info(f"Pre-fetching {len(kws_to_generate)} Layer 3 related keywords in batch...")
+                kw_explanations = generate_tag_explanations_batch(kws_to_generate)
+                import json
+                for kw_exp in kw_explanations:
+                    kw = kw_exp['tag_name']
+                    with state_manager._get_connection() as conn:
+                        with conn.cursor() as cursor:
+                            kw_details = state_manager.get_tag_details(kw)
+                            if not kw_details:
+                                cursor.execute('''
+                                    INSERT INTO tags (name, tag_type, explanation, takeaway, related_keywords)
+                                    VALUES (%s, %s, %s, %s, %s)
+                                    ON CONFLICT (name) DO NOTHING
+                                ''', (kw, 'Concept', kw_exp.get('explanation', ''), kw_exp.get('takeaway', ''), json.dumps(kw_exp.get('related_keywords', []))))
+                            else:
+                                cursor.execute('''
+                                    UPDATE tags SET explanation = %s, takeaway = %s, related_keywords = %s WHERE name = %s
+                                ''', (kw_exp.get('explanation', ''), kw_exp.get('takeaway', ''), json.dumps(kw_exp.get('related_keywords', [])), kw))
+                        conn.commit()
             
         logger.info("Sending Top 3 News to Telegram...")
         news_success = send_to_telegram(news_msg.strip())

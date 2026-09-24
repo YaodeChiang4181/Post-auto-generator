@@ -3,7 +3,7 @@ import json
 
 def test_key(key_name, api_key):
     print(f"測試 {key_name}...")
-    url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent'
+    url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
     headers = {
         'Content-Type': 'application/json',
         'x-goog-api-key': api_key

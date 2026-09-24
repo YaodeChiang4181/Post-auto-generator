@@ -65,18 +65,40 @@ def get_system_prompt():
 )
 def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
     """
-    實際呼叫 API 的內部函數，若發生暫時性錯誤 (如 503) 會自動重試。
+    實際呼叫 API 的內部函數，若發生暫時性錯誤會自動重試。
+    並加入「退而求其次」的模型累退嘗試邏輯。
     """
-    response = client.models.generate_content(
-        model="gemini-3.6-flash", # 使用測試成功的 Gemini 模型
-        contents=full_prompt,
-        config={
-            "response_mime_type": "application/json",
-            "response_schema": response_schema,
-            "temperature": temperature,
-        }
-    )
-    return response
+    models_to_try = [
+        "gemini-3.6-flash",  # 優先嘗試原本設定的模型
+        "gemini-2.0-flash",  # 新版高效能模型
+        "gemini-1.5-flash",  # 穩定且免費額度最高的模型
+        "gemini-1.5-pro"     # 備用 Pro 模型
+    ]
+    
+    last_exception = None
+    
+    for model_name in models_to_try:
+        try:
+            # 這裡加上 logging 可能會需要 import logger，但模組層級已經有 logger 了
+            logger.info(f"嘗試使用模型: {model_name}")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=full_prompt,
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": response_schema,
+                    "temperature": temperature,
+                }
+            )
+            return response
+        except Exception as e:
+            logger.warning(f"使用模型 {model_name} 失敗: {e}")
+            last_exception = e
+            continue  # 失敗則繼續嘗試下一個模型
+            
+    # 若所有模型皆失敗，拋出最後一個例外，讓 tenacity 進行指數退避重試
+    logger.error("所有備選模型皆嘗試失敗，準備進入重試機制等待...")
+    raise last_exception
 
 def summarize_with_llm(company_data, metrics, recent_history=None):
     """
@@ -220,6 +242,15 @@ class TagExplanationSchema(BaseModel):
     takeaway: str = Field(description="一句話的商業洞察、市場影響或 Takeaway")
     related_keywords: list[str] = Field(description="從解釋中挑選出 3 個與此高度相關的其他商業、科技或事件關鍵字", min_length=3, max_length=3)
 
+class TagExplanationBatchItemSchema(BaseModel):
+    tag_name: str = Field(description="標籤名稱")
+    explanation: str = Field(description="150 字內的白話科普解釋")
+    takeaway: str = Field(description="一句話的商業洞察、市場影響或 Takeaway")
+    related_keywords: list[str] = Field(description="從解釋中挑選出 3 個與此高度相關的其他商業、科技或事件關鍵字", min_length=3, max_length=3)
+
+class TagExplanationBatchSchema(BaseModel):
+    items: list[TagExplanationBatchItemSchema] = Field(description="標籤解釋列表")
+
 def generate_tag_explanation(tag_name):
     """
     針對未知的商業/科技名詞生成 150 字內的白話科普與重點整理。
@@ -255,6 +286,46 @@ def generate_tag_explanation(tag_name):
     except Exception as e:
         logger.error(f"呼叫 Gemini 生成科普失敗 ({tag_name}): {e}")
         return None
+
+def generate_tag_explanations_batch(tag_names):
+    """
+    批次生成多個標籤的科普解釋，以節省 API Quota。
+    """
+    if not GEMINI_API_KEY:
+        logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行批次科普生成")
+        return []
+    
+    if not tag_names:
+        return []
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        system_prompt = (
+            "你是一位頂尖的科技商業分析師，擅長用極簡、白話的方式將硬核名詞解釋給非技術背景的投資人聽。\n"
+            "你的任務是針對使用者輸入的一組名詞列表，為每個名詞產出三項內容：\n"
+            "1. 150 字內的精華科普 (Glossary)：講重點，不要說廢話。\n"
+            "2. 一句話的 Takeaway：點出它為什麼重要，或者目前的市場地位/影響力。\n"
+            "3. 3 個相關關鍵字：從你的解釋中，挑選出 3 個能進一步延伸閱讀的相關商業或科技關鍵字。"
+        )
+        
+        tags_str = ", ".join(tag_names)
+        user_content = f"請解釋以下名詞列表中的每一個名詞：\n{tags_str}"
+        logger.info(f"正在呼叫 Gemini 批次生成 {len(tag_names)} 個科普解釋...")
+        
+        full_prompt = f"{system_prompt}\n\n{user_content}"
+        response = _call_gemini_with_retry(
+            client=client,
+            full_prompt=full_prompt,
+            response_schema=TagExplanationBatchSchema,
+            temperature=0.3
+        )
+        
+        return response.parsed.model_dump().get("items", [])
+        
+    except Exception as e:
+        logger.error(f"呼叫 Gemini 批次生成科普失敗: {e}")
+        return []
 
 class FinanceTermSchema(BaseModel):
     focus_term: str = Field(description="今日焦點名詞 (中英對照名稱，附常見簡稱。一句話定錨，用生活直覺比喻破題)")
