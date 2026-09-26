@@ -9,13 +9,13 @@ logger = get_logger(__name__)
 def format_daily_report(company_data, metrics, recent_history=None):
     """
     將公司基本資料與搜尋結果透過 LLM 整理為結構化的每日報告。
-    回傳 (post_draft, vocab_word, proverb_text, german_word)
-    若 LLM 呼叫失敗，將回傳 (None, None, None, None)。
+    回傳 (post_draft, vocab_word, proverb_text, german_word, json_data)
+    若 LLM 呼叫失敗，將回傳 (None, None, None, None, None)。
     """
     json_data = summarize_with_llm(company_data, metrics, recent_history)
     
     if not json_data:
-        return None, None, None, None
+        return None, None, None, None, None
         
     try:
         story = json_data.get("story", "")
@@ -88,8 +88,8 @@ def format_daily_report(company_data, metrics, recent_history=None):
             f.write(html_content)
         logger.info(f"Generated HTML newsletter at {html_path}")
             
-        return markdown_content, vocab.get('word', ''), proverb.get('text', ''), german.get('word', '')
+        return markdown_content, vocab.get('word', ''), proverb.get('text', ''), german.get('word', ''), json_data
         
     except Exception as e:
         logger.error(f"Error parsing LLM JSON output: {e}")
-        return None, None, None, None
+        return None, None, None, None, None

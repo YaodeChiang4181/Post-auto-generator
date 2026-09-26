@@ -4,3 +4,7 @@ __pycache__/
 .env
 logs/*
 !logs/.gitkeep
+# Gmail OAuth 憑證 (請勿上傳至 Git)
+credentials.json
+token.json
+data/email_template_raw.html

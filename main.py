@@ -7,6 +7,7 @@ from modules.llm_api import select_top_news_with_llm, generate_tag_explanation, 
 from modules.telegram_bot import send_to_telegram
 from modules.state_manager import StateManager
 from modules.news_aggregator import get_daily_news_candidates
+from modules.gmail_sender import send_newsletter_as_draft
 
 
 logger = get_logger("main")
@@ -34,7 +35,7 @@ def main():
     # 3. Format Data (With LLM JSON output)
     logger.info("Formatting daily report with Vocabulary, Proverb, and German word...")
     recent_history = state_manager.get_recent_history(days=30)
-    post_draft, vocab_word, proverb_text, german_word = format_daily_report(company, metrics, recent_history)
+    post_draft, vocab_word, proverb_text, german_word, json_data = format_daily_report(company, metrics, recent_history)
     
     if not post_draft:
         logger.error("Failed to format report. Exiting.")
@@ -50,8 +51,10 @@ def main():
     top_news_data = select_top_news_with_llm(news_candidates)
     
     news_success = True
+    processed_news_data = {"top_news": []}  # 用於 Gmail 草稿
     if top_news_data and "top_news" in top_news_data:
         news_msg = "📰 【每日重大新聞快訊 Top 3】\n\n"
+        processed_news_data = top_news_data  # 保留完整結構供 Gmail 使用
         
         # Sort by rank just in case LLM shuffles them
         top_news_data["top_news"].sort(key=lambda x: x.get('rank', 99))
@@ -105,7 +108,27 @@ def main():
         logger.warning("Failed to generate Top 3 News.")
         news_success = False
     
-    # 5. Output result & Save History
+    # 5. 建立 Gmail 草稿 (Telegram 成功後執行)
+    if success and news_success:
+        logger.info("Building Gmail draft...")
+        try:
+            # 組合 story_data 傳入 gmail_sender
+            story_data_for_gmail = {
+                "company_name": company['name'],
+                "story": post_draft,
+                "vocab": json_data.get("vocabulary", {}) if json_data else {},
+                "proverb": json_data.get("proverb", {}) if json_data else {},
+                "german": json_data.get("german_vocab", {}) if json_data else {},
+            }
+            gmail_ok = send_newsletter_as_draft(story_data_for_gmail, processed_news_data)
+            if gmail_ok:
+                logger.info("Gmail draft created successfully.")
+            else:
+                logger.warning("Gmail draft creation failed (non-critical, continuing).")
+        except Exception as e:
+            logger.warning(f"Gmail draft step skipped due to error: {e}")
+
+    # 6. Output result & Save History
     if success and news_success:
         state_manager.save_history(vocab_word, proverb_text, german_word)
         logger.info("Workflow completed successfully. History saved.")
