@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from modules.llm_api import summarize_with_llm
 from config import DATA_DIR
 from logger import get_logger
@@ -41,6 +42,12 @@ def format_daily_report(company_data, metrics, recent_history=None):
         markdown_content += f"👉 應用：{proverb.get('usage', '')}"
         
         # 2. 產生電子報版的 HTML 內容並存檔
+        # 處理 Markdown 粗體與斜體
+        story_html = story
+        story_html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', story_html)
+        story_html = re.sub(r'\*(.*?)\*', r'<span style="color:rgb(37,110,225)"><i>\1</i></span>', story_html)
+        story_html = re.sub(r'\b_(.*?)_\b', r'<span style="color:rgb(37,110,225)"><i>\1</i></span>', story_html)
+        
         html_content = f'''
         <!DOCTYPE html>
         <html>
@@ -56,7 +63,7 @@ def format_daily_report(company_data, metrics, recent_history=None):
         </head>
         <body>
             <div class="story">
-                {story.replace(chr(10), '<br>')}
+                {story_html.replace(chr(10), '<br>')}
             </div>
             
             <div class="vocab-box">

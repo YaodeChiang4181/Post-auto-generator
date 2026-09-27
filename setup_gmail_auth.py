@@ -40,11 +40,11 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.compose']
 TOKEN_FILE = os.path.join(os.path.dirname(__file__), 'token.json')
 
 print("🚀 開始 Gmail OAuth 授權流程...")
-print("   瀏覽器即將開啟，請登入你的 Google 帳號並點擊「允許」")
+print("   請複製下方出現的網址，貼上到你的 Brave 瀏覽器中開啟：")
 print()
 
 flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
-creds = flow.run_local_server(port=0)
+creds = flow.run_local_server(port=8080, open_browser=False)
 
 with open(TOKEN_FILE, 'w') as token:
     token.write(creds.to_json())

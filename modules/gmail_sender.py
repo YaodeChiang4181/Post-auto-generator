@@ -3,6 +3,7 @@ import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
+import re
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -132,10 +133,27 @@ def build_email_html(story_data: dict, news_data: dict) -> str:
     story_html_lines = []
     for line in story_lines:
         stripped = line.strip()
+        
         if not stripped:
             story_html_lines.append("<br>")
-        elif stripped.startswith("#"):
+            continue
+            
+        is_hashtag = stripped.startswith("#")
+        
+        # 處理 Markdown 粗體 **粗體**
+        stripped = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', stripped)
+        # 處理 Markdown 斜體 *斜體* 或 _斜體_
+        stripped = re.sub(r'\*(.*?)\*', r'<span style="color:rgb(37,110,225)"><i>\1</i></span>', stripped)
+        stripped = re.sub(r'\b_(.*?)_\b', r'<span style="color:rgb(37,110,225)"><i>\1</i></span>', stripped)
+        
+        if is_hashtag:
             # hashtag 行
+            # 去除 # 後重新加上原有的綠色樣式
+            # 注意：若有 **#標籤** 這種寫法，會先被替換為 <b>#標籤</b>，startswith("#") 就會失效。
+            # 但若單純是 # hashtag，還是會成功匹配。
+            # 若為避免被改，可以優先抓 hashtag。
+            # 若要保持原意（沒有標記），直接放入原來的 HTML
+            # 這裡簡化，直接將轉換後的內容包入
             story_html_lines.append(
                 f'<div style="text-align:center"><b><font color="#93c47d">{stripped}</font></b></div>'
             )
