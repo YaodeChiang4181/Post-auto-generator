@@ -34,8 +34,7 @@ def main():
     
     # 3. Format Data (With LLM JSON output)
     logger.info("Formatting daily report with Vocabulary, Proverb, and German word...")
-    recent_history = state_manager.get_recent_history(days=30)
-    post_draft, vocab_word, proverb_text, german_word, json_data = format_daily_report(company, metrics, recent_history)
+    post_draft, vocab_word, proverb_text, german_word, json_data = format_daily_report(company, metrics, state_manager)
     
     if not post_draft:
         logger.error("Failed to format report. Exiting.")
@@ -48,7 +47,8 @@ def main():
     # --- News Module ---
     logger.info("Starting Daily Top 3 News Highlights...")
     news_candidates = get_daily_news_candidates()
-    top_news_data = select_top_news_with_llm(news_candidates)
+    recent_titles = state_manager.get_recent_article_titles(days=2)
+    top_news_data = select_top_news_with_llm(news_candidates, recent_titles=recent_titles)
     
     news_success = True
     processed_news_data = {"top_news": []}  # 用於 Gmail 草稿

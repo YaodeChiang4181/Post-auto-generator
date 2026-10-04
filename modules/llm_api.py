@@ -134,9 +134,10 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
         
         if recent_history:
             user_content += "【請避開以下近期已使用過的單字與諺語】\n"
-            user_content += f"已用英文單字：{', '.join(recent_history.get('vocab', []))}\n"
-            user_content += f"已用諺語：{', '.join(recent_history.get('proverb', []))}\n"
-            user_content += f"已用德文單字：{', '.join(recent_history.get('german', []))}\n"
+            # 只取最近 5 筆，避免上下文過長
+            user_content += f"已用英文單字：{', '.join(recent_history.get('vocab', [])[:5])}\n"
+            user_content += f"已用諺語：{', '.join(recent_history.get('proverb', [])[:5])}\n"
+            user_content += f"已用德文單字：{', '.join(recent_history.get('german', [])[:5])}\n"
         
         logger.info(f"正在呼叫 Gemini 彙整 {comp_name} 的資料...")
         
@@ -162,6 +163,55 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
         logger.error(f"呼叫 Gemini API 失敗 (或重試達上限): {e}")
         return None
 
+def regenerate_field_with_llm(field_type, rejected_word, story):
+    """
+    如果發現單字/諺語/德文單字已存在於歷史中，則呼叫此輕量級 API 重新產出。
+    field_type: 'vocab', 'proverb', 或是 'german'
+    """
+    if not GEMINI_API_KEY:
+        logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行重新生成")
+        return None
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        system_prompt = (
+            "你是一位專業的資訊整理助理。請根據以下已經寫好的「商業故事」，"
+            "重新提煉出一個**全新**的學習項目，因為之前你給的項目已經教過了。\n\n"
+        )
+        
+        user_content = f"【商業故事參考】\n{story}\n\n"
+        user_content += f"【已被拒絕（重複）的項目】：{rejected_word}\n\n"
+        
+        if field_type == 'vocab':
+            user_content += "請重新從故事中挑選另一個「商業英語單字」，必須與上述被拒絕的單字完全不同。"
+            schema = VocabularySchema
+        elif field_type == 'proverb':
+            user_content += "請重新挑選另一個契合故事主軸的「商業/處世諺語」，必須與上述被拒絕的諺語完全不同。"
+            schema = ProverbSchema
+        elif field_type == 'german':
+            user_content += "請重新挑選另一個相關的「德文單字」，必須與上述被拒絕的單字完全不同。"
+            schema = GermanVocabSchema
+        else:
+            return None
+            
+        full_prompt = f"{system_prompt}\n\n{user_content}"
+        
+        logger.info(f"正在呼叫 Gemini 重新生成 {field_type} (排除: {rejected_word})...")
+        
+        response = _call_gemini_with_retry(
+            client=client, 
+            full_prompt=full_prompt, 
+            response_schema=schema, 
+            temperature=0.8  # 稍微調高溫度以增加多樣性
+        )
+        
+        return response.parsed.model_dump()
+        
+    except Exception as e:
+        logger.error(f"呼叫 Gemini 重新生成 {field_type} 失敗: {e}")
+        return None
+
 class TagSchema(BaseModel):
     name: str = Field(description="標籤名稱 (如 TSMC, AI, CoWoS)")
     type: str = Field(description="標籤類型 (例如: Entity, Tech, Macro, Concept)")
@@ -177,7 +227,7 @@ class NewsItemSchema(BaseModel):
 class TopNewsSchema(BaseModel):
     top_news: list[NewsItemSchema] = Field(description="精選出的 Top 3 新聞列表", min_length=3, max_length=3)
 
-def select_top_news_with_llm(candidates):
+def select_top_news_with_llm(candidates, recent_titles=None):
     """
     呼叫 Gemini API 從候選名單中篩選出 Top 3 新聞，並生成短評及翻譯
     """
@@ -199,6 +249,10 @@ def select_top_news_with_llm(candidates):
             "1. 市場規模與資本流向：涉及巨額資本流動、央行政策、產業鏈核心異動者優先。\n"
             "2. 結構性變革：顛覆現有商業模式、重大法規更迭或關鍵技術落地者優先。\n"
             "3. 廣泛影響力：影響跨國市場或整體產業鏈，而非僅限單一小眾企業的日常營運。\n\n"
+            "【查重與後續報導判斷】\n"
+            "我們提供了「近兩日已發布的新聞標題紀錄」。請在評選前先比對候選新聞與這些紀錄：\n"
+            "- 如果候選新聞的內容與紀錄中的新聞**完全相同（單純的較慢報導）**，請將其權重降至零，絕對不選。\n"
+            "- 但如果該則新聞是同一事件的後續，且**包含了新的意見、新人物發言或新進展**，則視為有效新聞，仍可列入評選。\n\n"
             "【負面排除條件（嚴禁選入）】\n"
             "- 單一企業的促銷宣傳、日常公關稿、贊助公告。\n"
             "- 演藝娛樂、消費性產品微小版本更新、獵奇社會新聞。\n"
@@ -215,8 +269,17 @@ def select_top_news_with_llm(candidates):
         user_content = (
             "以下是自各大財經與科技媒體收集到的今日候選新聞列表：\n\n"
             f"{news_text_list}\n"
+        )
+
+        if recent_titles:
+            user_content += "【近兩日已發布的新聞標題紀錄 (請用以查重)】\n"
+            for title in recent_titles:
+                user_content += f"- {title}\n"
+            user_content += "\n"
+
+        user_content += (
             "請仔細審視上述候選清單，執行以下動作：\n"
-            "1. 依據系統指令的權重標準，選出今日最具商業影響力的 Top 3 重大事件（排序 1 至 3）。\n"
+            "1. 依據系統指令的權重標準（並留意查重規則），選出今日最具商業影響力的 Top 3 重大事件（排序 1 至 3）。\n"
             "2. 每則新聞輸出指定的 JSON 結構（rank, title, source_url, impact_reason, summary, tags）。\n"
             "   - 針對 tags 欄位，請為每則新聞萃取 3~5 個關鍵字（請盡量涵蓋公司名、關鍵技術，以及「供應鏈」、「監管」、「營收動能」等宏觀商業主題），並歸類其 type。"
         )

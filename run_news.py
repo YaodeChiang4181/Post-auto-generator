@@ -13,7 +13,8 @@ def run():
     
     logger.info("Starting Daily Top 3 News Highlights...")
     news_candidates = get_daily_news_candidates()
-    top_news_data = select_top_news_with_llm(news_candidates)
+    recent_titles = state_manager.get_recent_article_titles(days=2)
+    top_news_data = select_top_news_with_llm(news_candidates, recent_titles=recent_titles)
     
     if top_news_data and "top_news" in top_news_data:
         news_msg = "📰 【每日重大新聞快訊 Top 3】\n\n"

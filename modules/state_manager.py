@@ -161,6 +161,19 @@ class StateManager:
                         
                 return history
 
+    def check_vocabulary_exists(self, content, vocab_type='vocab'):
+        """Check if a specific vocabulary/proverb/german word already exists in history."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                # Use ILIKE for case-insensitive matching if it's PostgreSQL, but SQLite uses COLLATE NOCASE or LIKE
+                # Since we are using psycopg2 (PostgreSQL), we can use ILIKE
+                cursor.execute('''
+                    SELECT COUNT(*) FROM vocabulary_history
+                    WHERE type = %s AND content ILIKE %s
+                ''', (vocab_type, content))
+                count = cursor.fetchone()[0]
+                return count > 0
+
     def save_history(self, vocab=None, proverb=None, german=None, finance_term=None):
         """Save a new vocabulary, proverb, german word, or finance term to the history."""
         with self._get_connection() as conn:
@@ -302,3 +315,20 @@ class StateManager:
                 for idx, row in enumerate(rows):
                     context_str += f"[{idx+1}] {row['title']}\n摘要：{row['summary']}\n連結：{row['source_url']}\n\n"
                 return context_str.strip()
+
+    def get_recent_article_titles(self, days=2):
+        """Fetch article titles from the last `days` days to check for duplicates."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cutoff = datetime.now() - timedelta(days=days)
+                cursor.execute('''
+                    SELECT title, source_name, created_at 
+                    FROM articles
+                    WHERE created_at >= %s
+                    ORDER BY created_at DESC
+                ''', (cutoff,))
+                rows = cursor.fetchall()
+                titles = []
+                for row in rows:
+                    titles.append(f"【{row[1]}】{row[0]} (發布時間: {row[2].strftime('%Y-%m-%d %H:%M')})")
+                return titles

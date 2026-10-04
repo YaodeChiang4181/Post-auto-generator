@@ -1,18 +1,19 @@
 import os
 import json
 import re
-from modules.llm_api import summarize_with_llm
+from modules.llm_api import summarize_with_llm, regenerate_field_with_llm
 from config import DATA_DIR
 from logger import get_logger
 
 logger = get_logger(__name__)
 
-def format_daily_report(company_data, metrics, recent_history=None):
+def format_daily_report(company_data, metrics, state_manager):
     """
     將公司基本資料與搜尋結果透過 LLM 整理為結構化的每日報告。
     回傳 (post_draft, vocab_word, proverb_text, german_word, json_data)
     若 LLM 呼叫失敗，將回傳 (None, None, None, None, None)。
     """
+    recent_history = state_manager.get_recent_history(days=30)
     json_data = summarize_with_llm(company_data, metrics, recent_history)
     
     if not json_data:
@@ -23,6 +24,28 @@ def format_daily_report(company_data, metrics, recent_history=None):
         vocab = json_data.get("vocabulary", {})
         proverb = json_data.get("proverb", {})
         german = json_data.get("german_vocab", {})
+        
+        # 進行單字重複檢測與重新生成
+        if vocab and state_manager.check_vocabulary_exists(vocab.get('word', ''), 'vocab'):
+            logger.info(f"Vocabulary '{vocab.get('word')}' is a duplicate. Regenerating...")
+            new_vocab = regenerate_field_with_llm('vocab', vocab.get('word', ''), story)
+            if new_vocab:
+                vocab = new_vocab
+                json_data["vocabulary"] = new_vocab
+
+        if proverb and state_manager.check_vocabulary_exists(proverb.get('text', ''), 'proverb'):
+            logger.info(f"Proverb '{proverb.get('text')}' is a duplicate. Regenerating...")
+            new_proverb = regenerate_field_with_llm('proverb', proverb.get('text', ''), story)
+            if new_proverb:
+                proverb = new_proverb
+                json_data["proverb"] = new_proverb
+
+        if german and state_manager.check_vocabulary_exists(german.get('word', ''), 'german'):
+            logger.info(f"German word '{german.get('word')}' is a duplicate. Regenerating...")
+            new_german = regenerate_field_with_llm('german', german.get('word', ''), story)
+            if new_german:
+                german = new_german
+                json_data["german_vocab"] = new_german
         
         # 1. 產生 Telegram 版的 Markdown 內容
         markdown_content = f"{story}\n\n"
