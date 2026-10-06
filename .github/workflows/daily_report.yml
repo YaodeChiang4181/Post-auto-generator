@@ -27,6 +27,15 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: 📧 Restore Gmail OAuth credentials
+      if: env.GMAIL_CREDENTIALS != '' && env.GMAIL_TOKEN != ''
+      env:
+        GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
+        GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
+      run: |
+        echo "$GMAIL_CREDENTIALS" > credentials.json
+        echo "$GMAIL_TOKEN" > token.json
+
     - name: 🚀 Run automation script
       env:
         TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}

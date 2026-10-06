@@ -55,6 +55,9 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **Gmail 草稿 GitHub Actions 整合 (CI Gmail Draft)**:
+  * **Workflow 自動注入 OAuth 憑證**: 修改 `daily_report.yml`，新增步驟將 `GMAIL_CREDENTIALS` 與 `GMAIL_TOKEN` 兩個 GitHub Secrets 還原為 `credentials.json` / `token.json` 檔案，使 Gmail 草稿功能在 GitHub Actions 環境中也能正常運作。
+  * **Docker 專用授權腳本**: 新增 `setup_gmail_docker.py`，支援在 Docker 容器中透過 port mapping (`-p 8080:8080`) 完成 OAuth 授權。授權成功後，腳本會自動輸出 `token.json` 與 `credentials.json` 的內容，方便使用者直接複製貼上設定 GitHub Secrets。
 * **視覺化面板 UI 更新**: 於 InsightOrbit 前端介面的新聞圓圈 (Orbit) 展開狀態下，新增「跳轉看新聞」按鈕，允許使用者直接導向原始新聞網頁。
 * **晚間專業金融詞彙解析 (自動排程)**: 新增 `run_finance_term.py` 模組，透過 GitHub Actions 設定於台灣時間 18:07 自動觸發。系統會自動讀取當日新聞脈絡作為 LLM Prompt，並具備「防重複記憶機制」（記錄於資料庫 `vocabulary_history`），確保每日推送全新未解析過的金融術語。
 * **新聞來源擴充**: 將原本的 RSS 監測名單擴充，加入「經濟日報」、「Yahoo財經」、「The Wall Street Journal」與「CNN Markets」。
