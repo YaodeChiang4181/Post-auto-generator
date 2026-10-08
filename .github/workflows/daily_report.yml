@@ -28,13 +28,16 @@ jobs:
         pip install -r requirements.txt
 
     - name: 📧 Restore Gmail OAuth credentials
-      if: env.GMAIL_CREDENTIALS != '' && env.GMAIL_TOKEN != ''
+      if: ${{ secrets.GMAIL_CREDENTIALS != '' && secrets.GMAIL_TOKEN != '' }}
       env:
         GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
         GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
       run: |
         echo "$GMAIL_CREDENTIALS" > credentials.json
         echo "$GMAIL_TOKEN" > token.json
+        echo "✅ Gmail credentials restored"
+        echo "credentials.json size: $(wc -c < credentials.json) bytes"
+        echo "token.json size: $(wc -c < token.json) bytes"
 
     - name: 🚀 Run automation script
       env:
@@ -44,4 +47,9 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
+        echo "=== Pre-flight check ==="
+        echo "credentials.json exists: $(test -f credentials.json && echo YES || echo NO)"
+        echo "token.json exists: $(test -f token.json && echo YES || echo NO)"
+        echo "========================"
         python main.py
+
