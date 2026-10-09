@@ -55,6 +55,8 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **修復 GitHub Actions 執行錯誤 (Fix Workflow Syntax Error)**:
+  * 修正 `daily_report.yml` 中 `Restore Gmail OAuth credentials` 步驟的 `if` 條件語法錯誤。因 GitHub Actions 不支援在 `if` 條件式內直接讀取 `secrets` context，將其改回使用 `env` context 進行條件判斷，確保每日自動排程能順利啟動。
 * **Gmail 草稿 GitHub Actions 整合 (CI Gmail Draft)**:
   * **Workflow 自動注入 OAuth 憑證**: 修改 `daily_report.yml`，新增步驟將 `GMAIL_CREDENTIALS` 與 `GMAIL_TOKEN` 兩個 GitHub Secrets 還原為 `credentials.json` / `token.json` 檔案，使 Gmail 草稿功能在 GitHub Actions 環境中也能正常運作。
   * **Docker 專用授權腳本**: 新增 `setup_gmail_docker.py`，支援在 Docker 容器中透過 port mapping (`-p 8080:8080`) 完成 OAuth 授權。授權成功後，腳本會自動輸出 `token.json` 與 `credentials.json` 的內容，方便使用者直接複製貼上設定 GitHub Secrets。

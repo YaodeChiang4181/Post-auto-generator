@@ -28,10 +28,10 @@ jobs:
         pip install -r requirements.txt
 
     - name: 📧 Restore Gmail OAuth credentials
-      if: ${{ secrets.GMAIL_CREDENTIALS != '' && secrets.GMAIL_TOKEN != '' }}
       env:
         GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
         GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
+      if: ${{ env.GMAIL_CREDENTIALS != '' && env.GMAIL_TOKEN != '' }}
       run: |
         echo "$GMAIL_CREDENTIALS" > credentials.json
         echo "$GMAIL_TOKEN" > token.json
