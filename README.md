@@ -55,6 +55,8 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **新增隱私權政策端點 (Privacy Policy Route)**:
+  * 於 `api_server.py` 新增 `/privacy` 路由，以提供簡易的隱私權政策 HTML 網頁 (`https://insightorbit-api.onrender.com/privacy`)。此頁面主要用於滿足 Google Cloud OAuth 同意畫面 (Consent Screen) 正式發布時，對應用程式隱私權政策網址的要求。
 * **修復 GitHub Actions 執行錯誤 (Fix Workflow Syntax Error)**:
   * 修正 `daily_report.yml` 中 `Restore Gmail OAuth credentials` 步驟的 `if` 條件語法錯誤。因 GitHub Actions 不支援在 `if` 條件式內直接讀取 `secrets` context，將其改回使用 `env` context 進行條件判斷，確保每日自動排程能順利啟動。
 * **Gmail 草稿 GitHub Actions 整合 (CI Gmail Draft)**:

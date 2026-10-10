@@ -45,6 +45,31 @@ def read_root():
             return f.read()
     return "<h1>InsightOrbit API is running. Panel HTML not found.</h1>"
 
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_policy():
+    """Simple privacy policy page for Google OAuth verification."""
+    return """
+    <html>
+        <head><title>Privacy Policy - InsightOrbit</title></head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6;">
+            <h1>Privacy Policy for InsightOrbit</h1>
+            <p>InsightOrbit ("we", "our", or "us") is a personal automated script system. This Privacy Policy explains how we collect, use, and protect your information when you use our application.</p>
+            
+            <h2>1. Information We Collect</h2>
+            <p>Our application uses Google OAuth to access your Gmail account solely for the purpose of creating draft emails. We do not store your emails, passwords, or personal data on any external database.</p>
+            
+            <h2>2. How We Use Your Information</h2>
+            <p>The granted permissions (<code>https://www.googleapis.com/auth/gmail.compose</code>) are strictly used to compose and save daily news and business stories as drafts in your Gmail account. We do not read your existing emails, nor do we send emails on your behalf without your explicit action.</p>
+            
+            <h2>3. Data Storage and Security</h2>
+            <p>Authentication tokens are stored securely (e.g., via GitHub Secrets) and are only accessed by the automated script during its execution. No third-party analytics, tracking, or data sharing is implemented.</p>
+            
+            <h2>4. Contact Us</h2>
+            <p>If you have any questions about this Privacy Policy, please contact the developer.</p>
+        </body>
+    </html>
+    """
+
 @app.get("/api/today")
 def get_today_orbit():
     """
