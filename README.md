@@ -55,6 +55,11 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **視覺化面板靜態化與 GitHub Pages 遷移 (Static Panel & GitHub Pages)**:
+  * **解決 Render 免費額度耗盡問題**：將 `insight_orbit_panel.html` 轉型為支援純靜態運行的獨立架構，部署於 `/docs` 目錄以啟用 GitHub Pages 託管，徹底擺脫 Render 每月 750 小時休眠與暫停限制。
+  * **完整保留相同標籤歷史時間軸功能 (Tag Historical Timeline)**：靜態資料結構 (`docs/data/orbit_data.json`) 完整打包了所有標籤的深度科普 (Glossary/Takeaway) 以及關聯之歷史新聞事件清單 (Timeline)。使用者點擊時間軸任一歷史新聞時，前端 React 狀態會無縫切換主 Orbit 視角，實現零後端延遲 (0ms) 的跨時空新聞脈絡回溯。
+  * **自動化靜態資料匯出與同步**：新增 `modules/static_exporter.py`，於每日新聞排程結束後自動產出最新靜態資料；並在 GitHub Actions (`daily_report.yml`) 中加入自動 commit 與 push 機制，達成全自動更新。
+  * **永久在線隱私權網址**：新增 `docs/privacy.html`，提供 Google Cloud OAuth 審核專用的永久靜態隱私權政策頁面。
 * **Gmail OAuth 升級支援 Brave 瀏覽器繞過模式 (Brave OAuth Bypass)**:
   * 針對 Brave 瀏覽器的內建安全防護（Brave Shields 阻擋 Google 指紋識別、自動升級 HTTPS、阻擋 `localhost` 私有網路轉址）進行深度優化。
   * 升級 `setup_gmail_auth.py`，加入「手動網址列貼回」機制。使用者在瀏覽器完成授權後，即使頁面顯示無法連線，只需將網址列的完整回呼網址貼回終端機，腳本即可精準擷取 `code` 完成 Token 交換，並自動格式化輸出 `token.json` 供 GitHub Secrets 快速設定。

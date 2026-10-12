@@ -54,9 +54,13 @@ print("  [1] Brave / 手動複製貼上模式 (推薦！不受 Brave 盾牌或 l
 print("  [2] 自動本機伺服器模式 (適用於一般 Chrome/Edge 自動跳轉)")
 print()
 
-choice = input("請選擇模式 [預設 1]: ").strip()
-if choice not in ['1', '2']:
-    choice = '1'
+if len(sys.argv) > 1 and sys.argv[1] in ['1', '2']:
+    choice = sys.argv[1]
+    print(f"👉 使用指令參數選擇模式 [{choice}]")
+else:
+    choice = input("請選擇模式 [預設 1]: ").strip()
+    if choice not in ['1', '2']:
+        choice = '1'
 
 if choice == '1':
     # 模式 1：手動網址貼回 (完全繞過 Brave 任何本地重定向與網路阻擋)

@@ -105,6 +105,13 @@ def run():
             logger.info("News workflow completed successfully.")
         else:
             logger.error("News Telegram failed.")
+
+        # Export static data for GitHub Pages
+        try:
+            from modules.static_exporter import export_orbit_static_data
+            export_orbit_static_data()
+        except Exception as e:
+            logger.warning(f"Static orbit export failed: {e}")
     else:
         logger.warning("Failed to generate Top 3 News.")
         
