@@ -1,0 +1,48 @@
+name: Export Full Database History to GitHub Pages
+
+on:
+  workflow_dispatch: # 支援從 GitHub 網頁手動一鍵點擊執行
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 🚀 Export full database history to static files
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        python -c "
+        from modules.static_exporter import export_orbit_static_data
+        success = export_orbit_static_data()
+        if not success:
+            raise Exception('Export failed')
+        "
+
+    - name: 🌐 Commit and push exported history
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add docs/data/orbit_data.json index.html docs/index.html templates/insight_orbit_panel.html
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "chore: migrate complete historical database records to static GitHub Pages [skip ci]"
+          git push
+        fi

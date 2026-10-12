@@ -55,6 +55,9 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **一鍵遷移資料庫數週歷史紀錄至靜態頁面 (Full History Migration to Pages)**:
+  * 針對使用者反映「過去數週累積的歷史新聞與標籤時間軸若遺失很可惜」的需求，升級 `modules/static_exporter.py`，改為遍歷資料庫中累積的所有標籤，提取過去數週的所有歷史新聞關聯事件（Timeline）。
+  * 新增一鍵自動化工作流 `.github/workflows/export_history.yml`（支援網頁手動觸發 `workflow_dispatch`），由 GitHub Actions 直接連線至雲端 Neon 資料庫，將歷史全量資料批次打包匯出並自動同步至 GitHub Pages，完全保留數週的跨時空比對能力。
 * **視覺化面板靜態化與 GitHub Pages 遷移 (Static Panel & GitHub Pages)**:
   * **解決 Render 免費額度耗盡問題**：將 `insight_orbit_panel.html` 轉型為支援純靜態運行的獨立架構，部署於 `/docs` 目錄以啟用 GitHub Pages 託管，徹底擺脫 Render 每月 750 小時休眠與暫停限制。
   * **完整保留相同標籤歷史時間軸功能 (Tag Historical Timeline)**：靜態資料結構 (`docs/data/orbit_data.json`) 完整打包了所有標籤的深度科普 (Glossary/Takeaway) 以及關聯之歷史新聞事件清單 (Timeline)。使用者點擊時間軸任一歷史新聞時，前端 React 狀態會無縫切換主 Orbit 視角，實現零後端延遲 (0ms) 的跨時空新聞脈絡回溯。
