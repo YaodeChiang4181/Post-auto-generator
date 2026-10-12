@@ -55,6 +55,9 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **Gmail OAuth 升級支援 Brave 瀏覽器繞過模式 (Brave OAuth Bypass)**:
+  * 針對 Brave 瀏覽器的內建安全防護（Brave Shields 阻擋 Google 指紋識別、自動升級 HTTPS、阻擋 `localhost` 私有網路轉址）進行深度優化。
+  * 升級 `setup_gmail_auth.py`，加入「手動網址列貼回」機制。使用者在瀏覽器完成授權後，即使頁面顯示無法連線，只需將網址列的完整回呼網址貼回終端機，腳本即可精準擷取 `code` 完成 Token 交換，並自動格式化輸出 `token.json` 供 GitHub Secrets 快速設定。
 * **新增隱私權政策端點 (Privacy Policy Route)**:
   * 於 `api_server.py` 新增 `/privacy` 路由，以提供簡易的隱私權政策 HTML 網頁 (`https://insightorbit-api.onrender.com/privacy`)。此頁面主要用於滿足 Google Cloud OAuth 同意畫面 (Consent Screen) 正式發布時，對應用程式隱私權政策網址的要求。
 * **修復 GitHub Actions 執行錯誤 (Fix Workflow Syntax Error)**:
