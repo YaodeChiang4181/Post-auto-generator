@@ -25,27 +25,59 @@ def format_daily_report(company_data, metrics, state_manager):
         proverb = json_data.get("proverb", {})
         german = json_data.get("german_vocab", {})
         
-        # 進行單字重複檢測與重新生成
-        if vocab and state_manager.check_vocabulary_exists(vocab.get('word', ''), 'vocab'):
-            logger.info(f"Vocabulary '{vocab.get('word')}' is a duplicate. Regenerating...")
-            new_vocab = regenerate_field_with_llm('vocab', vocab.get('word', ''), story)
-            if new_vocab:
-                vocab = new_vocab
-                json_data["vocabulary"] = new_vocab
+        # 進行單字/諺語/德文重複檢測與受控重新生成 (Bounded Retry Loop, max 3 attempts)
+        max_retries = 3
 
-        if proverb and state_manager.check_vocabulary_exists(proverb.get('text', ''), 'proverb'):
-            logger.info(f"Proverb '{proverb.get('text')}' is a duplicate. Regenerating...")
-            new_proverb = regenerate_field_with_llm('proverb', proverb.get('text', ''), story)
-            if new_proverb:
-                proverb = new_proverb
-                json_data["proverb"] = new_proverb
+        # 1. 檢驗並重試英文單字 (Vocabulary)
+        vocab_rejected = []
+        for attempt in range(max_retries):
+            current_word = vocab.get('word', '') if vocab else ''
+            if current_word and state_manager.check_vocabulary_exists(current_word, 'vocab'):
+                logger.info(f"Vocabulary '{current_word}' is a duplicate (attempt {attempt+1}/{max_retries}). Regenerating...")
+                vocab_rejected.append(current_word)
+                new_vocab = regenerate_field_with_llm('vocab', vocab_rejected, story)
+                if new_vocab and new_vocab.get('word'):
+                    vocab = new_vocab
+                    json_data["vocabulary"] = new_vocab
+                else:
+                    logger.warning("Regenerating vocabulary returned empty result.")
+                    break
+            else:
+                break
 
-        if german and state_manager.check_vocabulary_exists(german.get('word', ''), 'german'):
-            logger.info(f"German word '{german.get('word')}' is a duplicate. Regenerating...")
-            new_german = regenerate_field_with_llm('german', german.get('word', ''), story)
-            if new_german:
-                german = new_german
-                json_data["german_vocab"] = new_german
+        # 2. 檢驗並重試商業諺語 (Proverb)
+        proverb_rejected = []
+        for attempt in range(max_retries):
+            current_proverb = proverb.get('text', '') if proverb else ''
+            if current_proverb and state_manager.check_vocabulary_exists(current_proverb, 'proverb'):
+                logger.info(f"Proverb '{current_proverb}' is a duplicate (attempt {attempt+1}/{max_retries}). Regenerating...")
+                proverb_rejected.append(current_proverb)
+                new_proverb = regenerate_field_with_llm('proverb', proverb_rejected, story)
+                if new_proverb and new_proverb.get('text'):
+                    proverb = new_proverb
+                    json_data["proverb"] = new_proverb
+                else:
+                    logger.warning("Regenerating proverb returned empty result.")
+                    break
+            else:
+                break
+
+        # 3. 檢驗並重試德文單字 (German Word)
+        german_rejected = []
+        for attempt in range(max_retries):
+            current_german = german.get('word', '') if german else ''
+            if current_german and state_manager.check_vocabulary_exists(current_german, 'german'):
+                logger.info(f"German word '{current_german}' is a duplicate (attempt {attempt+1}/{max_retries}). Regenerating...")
+                german_rejected.append(current_german)
+                new_german = regenerate_field_with_llm('german', german_rejected, story)
+                if new_german and new_german.get('word'):
+                    german = new_german
+                    json_data["german_vocab"] = new_german
+                else:
+                    logger.warning("Regenerating german word returned empty result.")
+                    break
+            else:
+                break
         
         # 1. 產生 Telegram 版的 Markdown 內容
         markdown_content = f"{story}\n\n"

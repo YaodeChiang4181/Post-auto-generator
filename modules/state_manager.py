@@ -8,11 +8,84 @@ from datetime import datetime, timedelta
 
 logger = get_logger(__name__)
 
+import re
+
+POS_TAGS = {"n", "v", "adj", "adv", "prep", "pron", "conj", "interj", "vt", "vi"}
+
+def normalize_text(text: str) -> str:
+    """
+    Standardize text by lowercasing, removing extra whitespaces,
+    stripping punctuation, parenthetical annotations (e.g. '(n.)', '(v.)'),
+    and leading English articles ('a', 'an', 'the').
+    """
+    if not text:
+        return ""
+    # Strip parenthetical annotations
+    cleaned = re.sub(r'[\(\[\{（【].*?[\)\]\}）】]', '', text)
+    cleaned = cleaned.lower()
+    # Strip leading English articles
+    cleaned = re.sub(r'^(?:a|an|the)\s+', '', cleaned)
+    # Strip non-alphanumeric/non-cjk chars to single spaces
+    cleaned = re.sub(r'[^\w\s\u4e00-\u9fff]', ' ', cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+def get_canonical_variants(text: str) -> set[str]:
+    """
+    Generate canonical variants (including stems for plurals, verb endings, and bracketed sub-terms).
+    For example:
+      'synergies' -> {'synergies', 'synergy'}
+      'hedging' -> {'hedging', 'hedge', 'hedg'}
+      '軋空 (Short Squeeze)' -> {'軋空', 'short squeeze'}
+    """
+    if not text:
+        return set()
+    
+    variants = set()
+    # Extract inner content from brackets if meaningful (e.g., English translation or term)
+    bracket_matches = re.findall(r'[\(\[\{（【](.*?)[\)\]\}）】]', text)
+    for bm in bracket_matches:
+        norm_b = normalize_text(bm)
+        if norm_b and norm_b not in POS_TAGS:
+            variants.add(norm_b)
+
+    base = normalize_text(text)
+    if base:
+        variants.add(base)
+        
+    if not variants:
+        return set()
+    
+    # Check single English words for inflections
+    for v in list(variants):
+        words = v.split()
+        if len(words) == 1:
+            w = words[0]
+            # Plurals: -ies -> -y
+            if w.endswith('ies') and len(w) > 4:
+                variants.add(w[:-3] + 'y')
+            elif w.endswith('es') and len(w) > 3:
+                variants.add(w[:-2])
+                variants.add(w[:-1])
+            elif w.endswith('s') and not w.endswith('ss') and len(w) > 3:
+                variants.add(w[:-1])
+            # Verb endings: -ing -> base, base+e
+            if w.endswith('ing') and len(w) > 4:
+                variants.add(w[:-3])
+                variants.add(w[:-3] + 'e')
+            # Verb endings: -ed -> base, base+e
+            if w.endswith('ed') and len(w) > 3:
+                variants.add(w[:-2])
+                variants.add(w[:-1])
+    
+    return {v for v in variants if v}
+
 class StateManager:
-    def __init__(self):
-        self.db_url = DATABASE_URL
-        if not self.db_url:
+    def __init__(self, db_url=None):
+        raw_url = db_url or DATABASE_URL
+        if not raw_url:
             raise ValueError("DATABASE_URL must be set in the environment or .env file")
+        self.db_url = raw_url.strip("\"' ")
         self._init_db()
         self._load_initial_data()
 
@@ -138,13 +211,14 @@ class StateManager:
             logger.info(f"Marked {stock_id} as posted at {now}")
 
     def get_recent_history(self, days=30):
-        """Fetch vocabularies and proverbs used in the last `days` days."""
+        """Fetch vocabularies and proverbs used in the last `days` days, ordered from newest to oldest."""
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 cutoff = datetime.now() - timedelta(days=days)
                 cursor.execute('''
                     SELECT type, content FROM vocabulary_history
                     WHERE created_at >= %s
+                    ORDER BY created_at DESC
                 ''', (cutoff,))
                 rows = cursor.fetchall()
                 
@@ -162,17 +236,39 @@ class StateManager:
                 return history
 
     def check_vocabulary_exists(self, content, vocab_type='vocab'):
-        """Check if a specific vocabulary/proverb/german word already exists in history."""
+        """
+        Check if a specific vocabulary/proverb/german word/finance term already exists in history.
+        Uses normalization and canonical variant matching to catch inflections, articles, and casing.
+        Maintains independent namespace per vocab_type.
+        """
+        if not content:
+            return False
+
+        content_variants = get_canonical_variants(content)
+        if not content_variants:
+            content_variants = {content.strip().lower()}
+
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
-                # Use ILIKE for case-insensitive matching if it's PostgreSQL, but SQLite uses COLLATE NOCASE or LIKE
-                # Since we are using psycopg2 (PostgreSQL), we can use ILIKE
                 cursor.execute('''
-                    SELECT COUNT(*) FROM vocabulary_history
-                    WHERE type = %s AND content ILIKE %s
-                ''', (vocab_type, content))
-                count = cursor.fetchone()[0]
-                return count > 0
+                    SELECT content FROM vocabulary_history
+                    WHERE type = %s
+                ''', (vocab_type,))
+                history_rows = cursor.fetchall()
+                
+                for row in history_rows:
+                    hist_content = row[0]
+                    if not hist_content:
+                        continue
+                    # Fast exact case-insensitive match
+                    if content.strip().lower() == hist_content.strip().lower():
+                        return True
+                    # Variant / inflection intersection match
+                    hist_variants = get_canonical_variants(hist_content)
+                    if content_variants.intersection(hist_variants):
+                        return True
+
+                return False
 
     def save_history(self, vocab=None, proverb=None, german=None, finance_term=None):
         """Save a new vocabulary, proverb, german word, or finance term to the history."""

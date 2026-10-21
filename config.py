@@ -22,6 +22,8 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.strip("\"' ")
 
 # App Config
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")

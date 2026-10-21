@@ -23,6 +23,20 @@ def run():
     logger.info("Generating financial term deep dive...")
     term_data = generate_finance_term(news_context, recent_history=recent_history)
     
+    # 進行金融名詞重複檢測與受控重新生成 (Max 3 attempts)
+    max_retries = 3
+    rejected_terms = []
+    for attempt in range(max_retries):
+        if not term_data:
+            break
+        current_term = term_data.get('focus_term', '')
+        if current_term and state_manager.check_vocabulary_exists(current_term, 'finance_term'):
+            logger.info(f"Financial term '{current_term}' is a duplicate (attempt {attempt+1}/{max_retries}). Regenerating...")
+            rejected_terms.append(current_term)
+            term_data = generate_finance_term(news_context, recent_history=recent_history, rejected_terms=rejected_terms)
+        else:
+            break
+    
     if term_data:
         msg = "💡 【今日金融名詞拆解】\n\n"
         msg += f"🔥 焦點名詞：{term_data['focus_term']}\n\n"

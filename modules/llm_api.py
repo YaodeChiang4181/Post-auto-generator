@@ -134,10 +134,10 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
         
         if recent_history:
             user_content += "【請避開以下近期已使用過的單字與諺語】\n"
-            # 只取最近 5 筆，避免上下文過長
-            user_content += f"已用英文單字：{', '.join(recent_history.get('vocab', [])[:5])}\n"
-            user_content += f"已用諺語：{', '.join(recent_history.get('proverb', [])[:5])}\n"
-            user_content += f"已用德文單字：{', '.join(recent_history.get('german', [])[:5])}\n"
+            # 傳遞近 20~30 筆最新紀錄，有效避免撞庫
+            user_content += f"已用英文單字：{', '.join(recent_history.get('vocab', [])[:30])}\n"
+            user_content += f"已用諺語：{', '.join(recent_history.get('proverb', [])[:15])}\n"
+            user_content += f"已用德文單字：{', '.join(recent_history.get('german', [])[:20])}\n"
         
         logger.info(f"正在呼叫 Gemini 彙整 {comp_name} 的資料...")
         
@@ -163,10 +163,11 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
         logger.error(f"呼叫 Gemini API 失敗 (或重試達上限): {e}")
         return None
 
-def regenerate_field_with_llm(field_type, rejected_word, story):
+def regenerate_field_with_llm(field_type, rejected_words, story):
     """
     如果發現單字/諺語/德文單字已存在於歷史中，則呼叫此輕量級 API 重新產出。
     field_type: 'vocab', 'proverb', 或是 'german'
+    rejected_words: 可以是單一字串或字串列表（包含所有被退件的重複詞）
     """
     if not GEMINI_API_KEY:
         logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行重新生成")
@@ -181,29 +182,34 @@ def regenerate_field_with_llm(field_type, rejected_word, story):
         )
         
         user_content = f"【商業故事參考】\n{story}\n\n"
-        user_content += f"【已被拒絕（重複）的項目】：{rejected_word}\n\n"
+        if isinstance(rejected_words, list):
+            rejected_str = ", ".join(rejected_words)
+        else:
+            rejected_str = str(rejected_words)
+            
+        user_content += f"【已被拒絕（重複）的項目清單】：{rejected_str}\n\n"
         
         if field_type == 'vocab':
-            user_content += "請重新從故事中挑選另一個「商業英語單字」，必須與上述被拒絕的單字完全不同。"
+            user_content += "請重新從故事中挑選另一個「商業英語單字」，必須與上述所有被拒絕的單字完全不同，且為全新詞彙。"
             schema = VocabularySchema
         elif field_type == 'proverb':
-            user_content += "請重新挑選另一個契合故事主軸的「商業/處世諺語」，必須與上述被拒絕的諺語完全不同。"
+            user_content += "請重新挑選另一個契合故事主軸的「商業/處世諺語」，必須與上述所有被拒絕的諺語完全不同。"
             schema = ProverbSchema
         elif field_type == 'german':
-            user_content += "請重新挑選另一個相關的「德文單字」，必須與上述被拒絕的單字完全不同。"
+            user_content += "請重新挑選另一個相關的「德文單字」，必須與上述所有被拒絕的單字完全不同。"
             schema = GermanVocabSchema
         else:
             return None
             
         full_prompt = f"{system_prompt}\n\n{user_content}"
         
-        logger.info(f"正在呼叫 Gemini 重新生成 {field_type} (排除: {rejected_word})...")
+        logger.info(f"正在呼叫 Gemini 重新生成 {field_type} (排除: {rejected_str})...")
         
         response = _call_gemini_with_retry(
             client=client, 
             full_prompt=full_prompt, 
             response_schema=schema, 
-            temperature=0.8  # 稍微調高溫度以增加多樣性
+            temperature=0.85  # 稍微調高溫度以增加多樣性
         )
         
         return response.parsed.model_dump()
@@ -399,7 +405,7 @@ class FinanceTermSchema(BaseModel):
     impact: list[str] = Field(description="對投資人 / 一般大眾的實質影響 (2-3 點連帶牽動)")
     takeaway_quote: str = Field(description="主編金句 / 知識外賣 (適合社群轉發或電子報收尾的洞察金句)")
 
-def generate_finance_term(news_context, target_term="", recent_history=None):
+def generate_finance_term(news_context, target_term="", recent_history=None, rejected_terms=None):
     """
     呼叫 Gemini 產生專業金融詞彙解析
     """
@@ -427,7 +433,10 @@ def generate_finance_term(news_context, target_term="", recent_history=None):
             
         if recent_history and recent_history.get("finance_term"):
             user_content += "\n【請避開以下近期已解析過的金融名詞】：\n"
-            user_content += ", ".join(recent_history["finance_term"]) + "\n"
+            user_content += ", ".join(recent_history["finance_term"][:30]) + "\n"
+            
+        if rejected_terms:
+            user_content += f"\n【特別警告：以下名詞已被退件（曾發布過或重複），絕對不可使用】：\n{', '.join(rejected_terms)}\n"
             
         logger.info("正在呼叫 Gemini 生成專業金融詞彙解析...")
         

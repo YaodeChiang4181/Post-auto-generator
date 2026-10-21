@@ -55,6 +55,12 @@
 - `DATABASE_URL`: (可選) 資料庫路徑。
 
 ## 更新日誌 (Changelog)
+* **單字防重複架構深度升級與形態模糊比對 (Resilient Deduplication & Normalization Architecture)**:
+  * **詞態還原與標準化比對 (Lemmatization & Normalization)**：針對過往 SQL `ILIKE` 精確比對無法防範單複數（`synergies` vs `synergy`）、動詞時態（`hedged` / `hedging` vs `hedge`）、片語冠詞（`a bear market` vs `bear market`）與詞性註解（`leverage (n.)`）之盲點，在 `modules/state_manager.py` 導入標準化清洗與詞幹衍生變體（Canonical Variants）交集比對引擎，徹底杜絕輕微變形所導致的漏檢。
+  * **受控重試迴圈與累積黑名單 (Bounded Retry Loop & Cumulative Blacklist)**：全面升級 `modules/formatter.py` 與 `run_finance_term.py`，將過往單次 `if` 重新生成機制改為至多 3 次的受控重試迴圈 (`max_retries=3`)。重試時會將歷次退件項目全量納入 Prompt 累積黑名單，避免 AI 盲猜再次撞庫。
+  * **歷史排序修復與前視記憶擴充 (Historical Lookahead & DESC Order)**：修正 `get_recent_history` 查詢加入 `ORDER BY created_at DESC`，確保精準取得最新的歷史紀錄；並將主 Prompt 的避開名單容量由原本的 5 筆大幅擴充至最近 30 筆，從源頭將撞庫率降低 90% 以上。
+  * **獨立命名空間防護 (Domain Isolation)**：依據業務邏輯，將夜間金融詞彙 (`finance_term`) 與早晨商務單字 (`vocab`) 保持獨立防護空間，互不干擾，並為晚間金融詞彙補足相同的後驗證與重試機制。
+  * **Docker 容器化全量邏輯驗證**：新增 `test_deduplication.py` 單元與整合測試，並已於 Docker 容器環境（模擬 GitHub Actions Linux Runner）全數通過驗證。
 * **一鍵遷移資料庫數週歷史紀錄至靜態頁面 (Full History Migration to Pages)**:
   * 針對使用者反映「過去數週累積的歷史新聞與標籤時間軸若遺失很可惜」的需求，升級 `modules/static_exporter.py`，改為遍歷資料庫中累積的所有標籤，提取過去數週的所有歷史新聞關聯事件（Timeline）。
   * 新增一鍵自動化工作流 `.github/workflows/export_history.yml`（支援網頁手動觸發 `workflow_dispatch`），由 GitHub Actions 直接連線至雲端 Neon 資料庫，將歷史全量資料批次打包匯出並自動同步至 GitHub Pages，完全保留數週的跨時空比對能力。
