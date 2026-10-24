@@ -42,7 +42,10 @@ except ImportError:
     print("   pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib")
     sys.exit(1)
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.compose']
+SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.compose'
+]
 TOKEN_FILE = os.path.join(os.path.dirname(__file__), 'token.json')
 
 print("=" * 65)

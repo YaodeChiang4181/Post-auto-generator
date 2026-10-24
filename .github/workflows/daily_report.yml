@@ -46,6 +46,9 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        EMAIL_AUTO_SEND: ${{ secrets.EMAIL_AUTO_SEND }}
+        NEWSLETTER_RECIPIENTS: ${{ secrets.NEWSLETTER_RECIPIENTS }}
+        EMAIL_SEND_MODE: ${{ secrets.EMAIL_SEND_MODE }}
       run: |
         echo "=== Pre-flight check ==="
         echo "credentials.json exists: $(test -f credentials.json && echo YES || echo NO)"

@@ -53,8 +53,22 @@
 - `TAVILY_API_KEY`: 用於公司背景資料與競品搜尋。
 - `TELEGRAM_BOT_TOKEN` & `TELEGRAM_CHAT_ID`: 用於自動發送產出結果。
 - `DATABASE_URL`: (可選) 資料庫路徑。
+- `EMAIL_AUTO_SEND`: (可選) 是否啟用自動直接寄信 (`true` / `false`，預設 `false` 建立草稿安全模式)。
+- `NEWSLETTER_RECIPIENTS`: (可選) 收件人名單，以逗號分隔（例如 `user1@gmail.com,user2@example.com`）。
+- `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **【每日時務商報】HTML 響應式電子報與自動寄送系統升級 (Direct Send & Modern HTML Newsletter)**:
+  * **標準化信件標題**：將信件主旨統一規格化為以「【每日時務商報】」為核心前綴（如 `【每日時務商報】｜2026/10/25` 或 `【每日時務商報#19】｜2026/10/25`）。
+  * **現代化 HTML 響應式模板抽離**：新增 `templates/email_newsletter.html` 專屬電子報模板，全面升級為卡片式 (Card-based) 響應式排版，包含深色質感漸層刊頭、膠囊標籤徽章 (Tag Pills)、橘色新聞標題超連結、藍色衝擊影響提示框、商業故事與單字/德語/諺語獨立資訊卡。
+  * **MIME Multipart 雙相容發送 (Plaintext + HTML)**：同時產生並附帶純文字降級內容與富文字 HTML，符合國際防垃圾郵件標準，相容所有收件軟體並極致化信件送達率。
+  * **Gmail API 自動直接寄信與雙層安全降級 (Direct Send & Fallback)**：
+    * 擴充 `SCOPES` 加入 `https://www.googleapis.com/auth/gmail.send` 與 `compose`。
+    * 支援由 `EMAIL_AUTO_SEND` 與 `NEWSLETTER_RECIPIENTS` 驅動的全自動發信功能。
+    * 支援逐封發送 (`individual`) 與密件副本 (`bcc`)，有效隱藏受眾郵件地址。
+    * 具備自動降級防呆：若未設定收件人、未開啟自動寄信或網路異常，系統自動平滑降級為「建立 Gmail 草稿」，確保排程流程永不中斷。
+  * **CI/CD 自動化工作流整合**：同步更新 `setup_gmail_auth.py`、`setup_gmail_docker.py` 與 `.github/workflows/daily_report.yml`，注入電子報自動發信相關環境變數。
+  * **全量單元與整合測試**：新增 `test_gmail_newsletter.py`，通過標題驗證、模板編譯、純文字降級、草稿模式與自動發信模式之 6 項單元測試，無任何回歸問題。
 * **單字防重複架構深度升級與形態模糊比對 (Resilient Deduplication & Normalization Architecture)**:
   * **詞態還原與標準化比對 (Lemmatization & Normalization)**：針對過往 SQL `ILIKE` 精確比對無法防範單複數（`synergies` vs `synergy`）、動詞時態（`hedged` / `hedging` vs `hedge`）、片語冠詞（`a bear market` vs `bear market`）與詞性註解（`leverage (n.)`）之盲點，在 `modules/state_manager.py` 導入標準化清洗與詞幹衍生變體（Canonical Variants）交集比對引擎，徹底杜絕輕微變形所導致的漏檢。
   * **受控重試迴圈與累積黑名單 (Bounded Retry Loop & Cumulative Blacklist)**：全面升級 `modules/formatter.py` 與 `run_finance_term.py`，將過往單次 `if` 重新生成機制改為至多 3 次的受控重試迴圈 (`max_retries=3`)。重試時會將歷次退件項目全量納入 Prompt 累積黑名單，避免 AI 盲猜再次撞庫。

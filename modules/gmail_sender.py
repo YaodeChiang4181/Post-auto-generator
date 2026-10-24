@@ -8,18 +8,22 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-# OAuth2 scopes needed for Gmail draft creation
-SCOPES = ['https://www.googleapis.com/auth/gmail.compose']
+# OAuth2 scopes: 支援自動直接發信 (gmail.send) 與建立草稿 (gmail.compose)
+SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.compose'
+]
 
-# Paths for OAuth credential files (must be placed in project root)
+# Paths for OAuth credential files
 CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'credentials.json')
 TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'token.json')
+TEMPLATE_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'email_newsletter.html')
 
 
 def _get_gmail_service():
     """
     取得已授權的 Gmail API 服務物件。
-    第一次執行時會開啟瀏覽器要求授權；之後會自動使用快取的 token.json。
+    若未授權或過期會自動嘗試使用 token.json 或重新刷新。
     """
     try:
         from google.oauth2.credentials import Credentials
@@ -47,123 +51,99 @@ def _get_gmail_service():
                 creds.refresh(Request())
                 logger.info("Gmail token 已自動刷新")
             except Exception as e:
-                logger.warning(f"Token 刷新失敗，將重新授權: {e}")
+                logger.warning(f"Token 刷新失敗，需重新授權: {e}")
                 creds = None
 
         if not creds:
             if not os.path.exists(CREDENTIALS_FILE):
                 logger.error(f"找不到 credentials.json，請從 Google Cloud Console 下載並放置於: {CREDENTIALS_FILE}")
                 return None
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-            logger.info("Gmail OAuth 授權成功")
+            try:
+                flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+                creds = flow.run_local_server(port=0)
+                logger.info("Gmail OAuth 授權成功")
+            except Exception as e:
+                logger.error(f"執行本地 OAuth 伺服器授權失敗: {e}")
+                return None
 
         # 儲存 token 供下次使用
-        with open(TOKEN_FILE, 'w') as token:
-            token.write(creds.to_json())
+        try:
+            with open(TOKEN_FILE, 'w', encoding='utf-8') as token:
+                token.write(creds.to_json())
+        except Exception as e:
+            logger.warning(f"寫入 token.json 失敗: {e}")
 
     service = build('gmail', 'v1', credentials=creds)
     return service
 
 
-def build_email_html(story_data: dict, news_data: dict) -> str:
+def build_email_html(story_data: dict, news_data: dict, issue_number: int = None, subject: str = None) -> str:
     """
-    根據「每日時務商報」範本，組合商業故事 + 新聞快訊的完整 HTML 信件內容。
-
-    story_data keys:
-        story (str): 商業故事主文（含標題、條列等）
-        vocab (dict): word, pos, pronunciation, definition, example
-        proverb (dict): text, explanation, usage
-        german (dict): word, pos, pronunciation, definition, example
-        company_name (str)
-
-    news_data keys:
-        top_news (list of dict): rank, title, source_url, impact_reason, summary, tags
+    組合【每日時務商報】現代化響應式 HTML 電子報內容。
+    優先使用 templates/email_newsletter.html 模板。
     """
-    today = datetime.now().strftime("%Y/%m/%d")
+    today_str = datetime.now().strftime("%Y/%m/%d")
     company_name = story_data.get("company_name", "")
+    issue_title = f"第 {issue_number} 期" if issue_number else "今日商報"
+    actual_subject = subject or (f"【每日時務商報#{issue_number}】｜{today_str}" if issue_number else f"【每日時務商報】｜{today_str}")
 
     # --- 新聞區段 HTML ---
     news_items_html = ""
-    for item in news_data.get("top_news", []):
-        rank = item.get("rank", "")
+    for idx, item in enumerate(news_data.get("top_news", []), 1):
+        rank = item.get("rank", idx)
         title = item.get("title", "")
         url = item.get("source_url", "#")
         impact = item.get("impact_reason", "")
         summary = item.get("summary", "")
         tags = item.get("tags", [])
-        tags_str = "　".join([f"#{t['name']}" for t in tags])
+        
+        tags_html = "".join([f'<span class="tag-pill">#{t.get("name", t)}</span>' for t in tags])
 
         news_items_html += f"""
-<li style="margin:12px 0px 0px 32px">
-  <p style="line-height:1.6em;margin:0px;box-sizing:border-box;padding-left:4px">
-    <span style="background-color:transparent">
-      <b><a href="{url}" target="_blank" style="color:#ff9900;text-decoration:none">{title}</a></b>
-    </span>
-  </p>
-  <ul style="color:rgb(54,55,55);margin-top:0px;padding:0px">
-    <li style="margin:6px 0px 0px 32px">
-      <p style="line-height:1.6em;margin:0px;box-sizing:border-box;padding-left:4px">
-        <em><strong>影響：</strong></em>
-      </p>
-      <p style="line-height:1.6em;margin:0px;box-sizing:border-box;padding-left:4px">
-        <span style="color:rgb(37,110,225)"><i>{impact}</i></span>
-      </p>
-    </li>
-    <li style="margin:6px 0px 0px 32px">
-      <p style="line-height:1.6em;margin:0px;box-sizing:border-box;padding-left:4px">
-        <em><strong>摘要：</strong></em>
-      </p>
-      <p style="line-height:1.6em;margin:0px;box-sizing:border-box;padding-left:4px">
-        <i>{summary}</i>
-      </p>
-    </li>
-    <li style="margin:4px 0px 0px 32px;color:#888888">
-      <p style="line-height:1.6em;margin:0px;box-sizing:border-box;padding-left:4px;font-size:0.9em">
-        {tags_str}
-      </p>
-    </li>
-  </ul>
-</li>
-"""
+        <div class="news-card">
+          <div class="news-title">
+            <span style="color:#e67e22;font-weight:bold;margin-right:4px;">{rank}.</span>
+            <a href="{url}" target="_blank">{title}</a>
+          </div>
+          <div class="news-impact">
+            <strong>影響：</strong>{impact}
+          </div>
+          <div class="news-summary">
+            <strong>摘要：</strong>{summary}
+          </div>
+          <div class="tags-container">
+            {tags_html}
+          </div>
+        </div>
+        """
 
-    # --- 商業故事主文處理（換行轉 HTML）---
+    # --- 商業故事主文處理 ---
     story_raw = story_data.get("story", "")
     story_lines = story_raw.split("\n")
     story_html_lines = []
     for line in story_lines:
         stripped = line.strip()
-        
         if not stripped:
             story_html_lines.append("<br>")
             continue
-            
+
         is_hashtag = stripped.startswith("#")
-        
-        # 處理 Markdown 粗體 **粗體**
+        # 處理粗體與斜體
         stripped = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', stripped)
-        # 處理 Markdown 斜體 *斜體* 或 _斜體_
-        stripped = re.sub(r'\*(.*?)\*', r'<span style="color:rgb(37,110,225)"><i>\1</i></span>', stripped)
-        stripped = re.sub(r'\b_(.*?)_\b', r'<span style="color:rgb(37,110,225)"><i>\1</i></span>', stripped)
-        
+        stripped = re.sub(r'\*(.*?)\*', r'<span style="color:#2563eb"><i>\1</i></span>', stripped)
+        stripped = re.sub(r'\b_(.*?)_\b', r'<span style="color:#2563eb"><i>\1</i></span>', stripped)
+
         if is_hashtag:
-            # hashtag 行
-            # 去除 # 後重新加上原有的綠色樣式
-            # 注意：若有 **#標籤** 這種寫法，會先被替換為 <b>#標籤</b>，startswith("#") 就會失效。
-            # 但若單純是 # hashtag，還是會成功匹配。
-            # 若為避免被改，可以優先抓 hashtag。
-            # 若要保持原意（沒有標記），直接放入原來的 HTML
-            # 這裡簡化，直接將轉換後的內容包入
             story_html_lines.append(
-                f'<div style="text-align:center"><b><font color="#93c47d">{stripped}</font></b></div>'
+                f'<div style="text-align:center;margin-top:12px;"><b><font color="#10b981">{stripped}</font></b></div>'
             )
         else:
             story_html_lines.append(
-                f'<div style="text-align:center">{stripped}</div>'
+                f'<div style="margin:4px 0;">{stripped}</div>'
             )
     story_html = "\n".join(story_html_lines)
 
-    # --- 單字、德語、諺語區段 ---
+    # --- 單字、德語、諺語資料 ---
     vocab = story_data.get("vocab", {})
     german = story_data.get("german", {})
     proverb = story_data.get("proverb", {})
@@ -181,122 +161,153 @@ def build_email_html(story_data: dict, news_data: dict) -> str:
     german_ex = german.get("example", "").replace("\n", "<br>")
 
     proverb_text = proverb.get("text", "")
-    proverb_exp = proverb.get("explanation", "")
-    proverb_usage = proverb.get("usage", "")
+    proverb_exp = proverb.get("explanation", "").replace("\n", "<br>")
+    proverb_usage = proverb.get("usage", "").replace("\n", "<br>")
 
-    html = f"""<div dir="ltr">
+    # 讀取獨立模板
+    if os.path.exists(TEMPLATE_FILE):
+        try:
+            with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
+                template_str = f.read()
 
-<!-- ===== 每日重大新聞快訊 Top 3 ===== -->
-<h2 style="color:rgb(54,55,55);font-family:'SF Pro Display',-apple-system,system-ui,sans-serif;word-break:keep-all;margin:0px auto 0.625em;line-height:1.16em;font-size:28px;max-width:600px">
-  <span style="color:rgb(163,98,0)">每日重大新聞快訊</span>
-  <span style="color:rgb(163,98,0)">Top 3</span>
-</h2>
+            replacements = {
+                "{{ subject }}": actual_subject,
+                "{{ issue_title }}": issue_title,
+                "{{ date }}": today_str,
+                "{{ news_items_html }}": news_items_html,
+                "{{ company_name }}": company_name,
+                "{{ story_html }}": story_html,
+                "{{ vocab_word }}": vocab_word,
+                "{{ vocab_pos }}": vocab_pos,
+                "{{ vocab_pron }}": vocab_pron,
+                "{{ vocab_def }}": vocab_def,
+                "{{ vocab_ex }}": vocab_ex,
+                "{{ proverb_text }}": proverb_text,
+                "{{ proverb_exp }}": proverb_exp,
+                "{{ proverb_usage }}": proverb_usage,
+                "{{ german_word }}": german_word,
+                "{{ german_pos }}": german_pos,
+                "{{ german_pron }}": german_pron,
+                "{{ german_def }}": german_def,
+                "{{ german_ex }}": german_ex,
+            }
+            for key, val in replacements.items():
+                template_str = template_str.replace(key, str(val))
+            return template_str
+        except Exception as e:
+            logger.warning(f"讀取 HTML 模板失敗，切換內建版面: {e}")
 
-<div>
-  <ol style="margin-top:0px;padding:0px;max-width:600px;margin-left:auto;margin-right:auto;font-family:-apple-system-ui-serif,ui-serif,Georgia,serif">
-    {news_items_html}
-  </ol>
-</div>
-
-<hr style="border:none;border-top:2px solid #f0c060;margin:28px auto;max-width:600px">
-
-<!-- ===== 商業故事 ===== -->
-<div style="text-align:center;max-width:600px;margin:0 auto">
-  <div>
-    <b><font color="#ff9900" style="font-size:large">商業故事：{company_name}</font></b>
-  </div>
-  <div><br></div>
-
-  {story_html}
-
-  <div><br></div>
-</div>
-
-<hr style="border:none;border-top:1px solid #eeeeee;margin:24px auto;max-width:600px">
-
-<!-- ===== 今日商務單字 ===== -->
-<div style="text-align:center;max-width:600px;margin:0 auto">
-  <div>
-    <b><font size="4" color="#ff9900">【今日商務單字】</font></b>
-  </div>
-  <div><br></div>
-  <div>
-    <b><i>{vocab_word} </i>({vocab_pos}) // {vocab_pron} //</b>
-  </div>
-  <div><br></div>
-  <div><font color="#6fa8dc">{vocab_def}</font></div>
-  <div><br></div>
-  <div><b>【例句】</b></div>
-  <div><br></div>
-  <div><b><i>{vocab_ex}</i></b></div>
-  <div><br></div>
-</div>
-
-<hr style="border:none;border-top:1px solid #eeeeee;margin:24px auto;max-width:600px">
-
-<!-- ===== 今日商業諺語 ===== -->
-<div style="text-align:center;max-width:600px;margin:0 auto">
-  <div>
-    <b><font size="4">【今日商業/處世諺語】</font></b>
-  </div>
-  <div><br></div>
-  <div><b><i>{proverb_text}</i></b></div>
-  <div><br></div>
-  <div>
-    <ul style="text-align:left;display:inline-block;margin:0 auto">
-      <li><b><i><font color="#6fa8dc">解析：</font></i></b></li>
-    </ul>
-  </div>
-  <div style="max-width:500px;margin:0 auto;text-align:center">{proverb_exp}</div>
-  <div><br></div>
-  <div>
-    <ul style="text-align:left;display:inline-block;margin:0 auto">
-      <li><b><i><font color="#6fa8dc">應用：</font></i></b></li>
-    </ul>
-  </div>
-  <div style="max-width:500px;margin:0 auto;text-align:center">{proverb_usage}</div>
-  <div><br></div>
-</div>
-
-<hr style="border:none;border-top:1px solid #eeeeee;margin:24px auto;max-width:600px">
-
-<!-- ===== 德語小教室 ===== -->
-<div style="text-align:center;max-width:600px;margin:0 auto">
-  <div>
-    <b><font size="4">【德語小教室】</font></b>
-  </div>
-  <div><br></div>
-  <div>
-    <b><i>{german_word} </i>({german_pos}) / {german_pron} /</b>
-  </div>
-  <div><br></div>
-  <div><font color="#6fa8dc">{german_def}</font></div>
-  <div><br></div>
-  <div><b>【例句】</b></div>
-  <div><br></div>
-  <div><b><i>{german_ex}</i></b></div>
-  <div><br></div>
-</div>
-
-<div style="text-align:center;color:#aaaaaa;font-size:12px;margin-top:32px;max-width:600px;margin-left:auto;margin-right:auto">
-  每日時務商報 · 自動產出 · {today}
-</div>
-
-</div>"""
-
-    return html
-
-
-def create_gmail_draft(subject: str, html_body: str) -> bool:
+    # 內建備用版面
+    return f"""
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;line-height:1.6;color:#333;">
+      <h1 style="color:#d97706;text-align:center;">{actual_subject}</h1>
+      <p style="text-align:center;color:#666;">{today_str}</p>
+      <hr style="border:none;border-top:2px solid #f59e0b;margin:20px 0;">
+      <h2>每日重大新聞快訊 Top 3</h2>
+      {news_items_html}
+      <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+      <h2>商業故事：{company_name}</h2>
+      {story_html}
+      <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+      <h3>💡 今日商務單字: {vocab_word} ({vocab_pos})</h3>
+      <p>{vocab_def}</p>
+      <p><em>{vocab_ex}</em></p>
+      <h3>📜 今日商業諺語</h3>
+      <p><strong>{proverb_text}</strong></p>
+      <p>{proverb_exp}</p>
+      <h3>🇩🇪 德語小教室: {german_word} ({german_pos})</h3>
+      <p>{german_def}</p>
+      <p><em>{german_ex}</em></p>
+    </div>
     """
-    在 Gmail 中建立一封 HTML 格式的草稿。
 
-    Args:
-        subject: 信件主旨
-        html_body: 信件 HTML 內容
 
-    Returns:
-        True 表示成功，False 表示失敗
+def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int = None, subject: str = None) -> str:
+    """產生標準純文字版本 (Plain Text Fallback)"""
+    today_str = datetime.now().strftime("%Y/%m/%d")
+    company_name = story_data.get("company_name", "")
+    actual_subject = subject or (f"【每日時務商報#{issue_number}】｜{today_str}" if issue_number else f"【每日時務商報】｜{today_str}")
+
+    lines = [
+        f"========================================",
+        f" {actual_subject}",
+        f" 日期：{today_str}",
+        f"========================================\n",
+        f"【每日重大新聞快訊 Top 3】\n"
+    ]
+
+    for idx, item in enumerate(news_data.get("top_news", []), 1):
+        lines.append(f"{idx}. {item.get('title', '')}")
+        lines.append(f"   連結: {item.get('source_url', '')}")
+        lines.append(f"   影響: {item.get('impact_reason', '')}")
+        lines.append(f"   摘要: {item.get('summary', '')}\n")
+
+    lines.append(f"\n【今日深度商業故事：{company_name}】\n")
+    lines.append(story_data.get("story", "").strip())
+
+    vocab = story_data.get("vocab", {})
+    lines.append(f"\n\n【今日商務單字】")
+    lines.append(f"{vocab.get('word', '')} ({vocab.get('pos', '')}) /{vocab.get('pronunciation', '')}/")
+    lines.append(f"釋義：{vocab.get('definition', '')}")
+    lines.append(f"例句：{vocab.get('example', '')}")
+
+    proverb = story_data.get("proverb", {})
+    lines.append(f"\n【今日商業/處世諺語】")
+    lines.append(f"{proverb.get('text', '')}")
+    lines.append(f"解析：{proverb.get('explanation', '')}")
+    lines.append(f"應用：{proverb.get('usage', '')}")
+
+    german = story_data.get("german", {})
+    lines.append(f"\n【德語小教室】")
+    lines.append(f"{german.get('word', '')} ({german.get('pos', '')}) /{german.get('pronunciation', '')}/")
+    lines.append(f"釋義：{german.get('definition', '')}")
+    lines.append(f"例句：{german.get('example', '')}")
+
+    lines.append(f"\n----------------------------------------")
+    lines.append("【每日時務商報】· InsightOrbit 自動化生成系統")
+
+    return "\n".join(lines)
+
+
+def send_email_message(subject: str, html_body: str, to_email: str = None, bcc_emails: list = None, plain_body: str = None) -> bool:
+    """
+    透過 Gmail API 直接發送一封電子郵件 (支援 HTML 與 Plain Text 雙相容)。
+    """
+    service = _get_gmail_service()
+    if not service:
+        logger.error("無法取得 Gmail Service，寄信終止")
+        return False
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = 'me'
+
+        if to_email:
+            msg['To'] = to_email
+        if bcc_emails:
+            msg['Bcc'] = ", ".join(bcc_emails)
+
+        # 附加純文字降級版本
+        if plain_body:
+            msg.attach(MIMEText(plain_body, 'plain', 'utf-8'))
+
+        # 附加 HTML 富文字內容
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+        send_body = {'raw': raw}
+
+        service.users().messages().send(userId='me', body=send_body).execute()
+        return True
+    except Exception as e:
+        logger.error(f"發送郵件失敗 (To: {to_email}, Bcc: {bcc_emails}): {e}")
+        return False
+
+
+def create_gmail_draft(subject: str, html_body: str, plain_body: str = None) -> bool:
+    """
+    在 Gmail 中建立一封 HTML 格式草稿 (安全備援)。
     """
     service = _get_gmail_service()
     if not service:
@@ -306,11 +317,10 @@ def create_gmail_draft(subject: str, html_body: str) -> bool:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = 'me'
-        # 收件人由使用者在草稿中自行填寫，此處不設定 To
 
-        # 加入 HTML 內容
-        html_part = MIMEText(html_body, 'html', 'utf-8')
-        msg.attach(html_part)
+        if plain_body:
+            msg.attach(MIMEText(plain_body, 'plain', 'utf-8'))
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
         draft_body = {'message': {'raw': raw}}
@@ -319,31 +329,92 @@ def create_gmail_draft(subject: str, html_body: str) -> bool:
         draft_id = draft.get('id', 'unknown')
         logger.info(f"Gmail 草稿建立成功！草稿 ID: {draft_id}")
         return True
-
     except Exception as e:
         logger.error(f"建立 Gmail 草稿失敗: {e}")
         return False
 
 
-def send_newsletter_as_draft(story_data: dict, news_data: dict, issue_number: int = None) -> bool:
+def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None) -> dict:
     """
-    將商業故事與新聞快訊組合成「每日時務商報」格式並建立 Gmail 草稿。
-
-    Args:
-        story_data: 商業故事相關資料 (參考 build_email_html)
-        news_data: 新聞資料 (參考 build_email_html)
-        issue_number: 期號 (選填，若不提供則自動使用日期)
+    【每日時務商報】整合發信入口：
+    依據環境變數 (EMAIL_AUTO_SEND) 與收件人清單自動判定直接發送或建立草稿。
+    若發送失敗自動安全降級為建立草稿。
 
     Returns:
-        True 表示成功，False 表示失敗
+        dict: {
+            "mode": "sent" 或 "draft",
+            "success": bool,
+            "sent_count": int,
+            "total_recipients": int,
+            "subject": str
+        }
     """
     today_str = datetime.now().strftime("%Y/%m/%d")
 
+    # 確保信件標題格式標準化為【每日時務商報】
     if issue_number:
-        subject = f"每日時務商報 #{issue_number}｜{today_str}"
+        subject = f"【每日時務商報#{issue_number}】｜{today_str}"
     else:
-        subject = f"每日時務商報｜{today_str}"
+        subject = f"【每日時務商報】｜{today_str}"
 
-    logger.info(f"正在組合 Gmail 草稿: {subject}")
-    html_body = build_email_html(story_data, news_data)
-    return create_gmail_draft(subject, html_body)
+    html_body = build_email_html(story_data, news_data, issue_number, subject)
+    plain_body = build_email_plaintext(story_data, news_data, issue_number, subject)
+
+    auto_send = os.getenv("EMAIL_AUTO_SEND", "false").lower() in ("true", "1", "yes")
+    recipients_str = os.getenv("NEWSLETTER_RECIPIENTS", "")
+    send_mode = os.getenv("EMAIL_SEND_MODE", "individual").lower()  # "individual" 或 "bcc"
+
+    recipients = [r.strip() for r in recipients_str.split(",") if r.strip()]
+
+    # 若開啟自動發信且有設定收件人
+    if auto_send and recipients:
+        logger.info(f"🚀 開始自動寄送電子報: {subject}，目標收件人數: {len(recipients)}")
+        sent_count = 0
+
+        if send_mode == "bcc":
+            # 模式 1: 單封信件透過 Bcc 群發
+            ok = send_email_message(subject, html_body, to_email="me", bcc_emails=recipients, plain_body=plain_body)
+            if ok:
+                sent_count = len(recipients)
+        else:
+            # 模式 2: 逐封獨立寄送 (避免 Bcc 判定為垃圾信，每位讀者收到的 To 都是自己)
+            for to in recipients:
+                if send_email_message(subject, html_body, to_email=to, plain_body=plain_body):
+                    sent_count += 1
+
+        if sent_count > 0:
+            logger.info(f"✅ 電子報自動發送成功！成功寄出: {sent_count}/{len(recipients)}")
+            return {
+                "mode": "sent",
+                "success": True,
+                "sent_count": sent_count,
+                "total_recipients": len(recipients),
+                "subject": subject
+            }
+        else:
+            logger.warning("⚠️ 自動發信失敗，立即安全降級為建立 Gmail 草稿...")
+            draft_ok = create_gmail_draft(subject, html_body, plain_body)
+            return {
+                "mode": "draft_fallback",
+                "success": draft_ok,
+                "sent_count": 0,
+                "total_recipients": len(recipients),
+                "subject": subject
+            }
+
+    # 未開啟自動發信或無收件人名單 -> 建立草稿 (既有安全模式)
+    logger.info(f"📝 未開啟 EMAIL_AUTO_SEND 或無收件人名單，建立 Gmail 草稿: {subject}")
+    draft_ok = create_gmail_draft(subject, html_body, plain_body)
+    return {
+        "mode": "draft",
+        "success": draft_ok,
+        "sent_count": 0,
+        "total_recipients": len(recipients),
+        "subject": subject
+    }
+
+
+def send_newsletter_as_draft(story_data: dict, news_data: dict, issue_number: int = None) -> bool:
+    """向後相容輔助函式"""
+    res = send_newsletter(story_data, news_data, issue_number)
+    return res.get("success", False)

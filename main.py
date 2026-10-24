@@ -7,7 +7,7 @@ from modules.llm_api import select_top_news_with_llm, generate_tag_explanation, 
 from modules.telegram_bot import send_to_telegram
 from modules.state_manager import StateManager
 from modules.news_aggregator import get_daily_news_candidates
-from modules.gmail_sender import send_newsletter_as_draft
+from modules.gmail_sender import send_newsletter, send_newsletter_as_draft
 
 
 logger = get_logger("main")
@@ -108,9 +108,9 @@ def main():
         logger.warning("Failed to generate Top 3 News.")
         news_success = False
     
-    # 5. 建立 Gmail 草稿 (Telegram 成功後執行)
+    # 5. 發送【每日時務商報】電子報 / 建立 Gmail 草稿 (Telegram 成功後執行)
     if success and news_success:
-        logger.info("Building Gmail draft...")
+        logger.info("Processing Gmail newsletter (Direct send or Draft)...")
         try:
             # 組合 story_data 傳入 gmail_sender
             story_data_for_gmail = {
@@ -120,13 +120,16 @@ def main():
                 "proverb": json_data.get("proverb", {}) if json_data else {},
                 "german": json_data.get("german_vocab", {}) if json_data else {},
             }
-            gmail_ok = send_newsletter_as_draft(story_data_for_gmail, processed_news_data)
-            if gmail_ok:
-                logger.info("Gmail draft created successfully.")
+            gmail_res = send_newsletter(story_data_for_gmail, processed_news_data)
+            if gmail_res.get("success"):
+                if gmail_res.get("mode") == "sent":
+                    logger.info(f"Gmail newsletter sent successfully to {gmail_res.get('sent_count')}/{gmail_res.get('total_recipients')} recipients.")
+                else:
+                    logger.info(f"Gmail draft created successfully: {gmail_res.get('subject')}")
             else:
-                logger.warning("Gmail draft creation failed (non-critical, continuing).")
+                logger.warning("Gmail newsletter step completed with errors (non-critical, continuing).")
         except Exception as e:
-            logger.warning(f"Gmail draft step skipped due to error: {e}")
+            logger.warning(f"Gmail newsletter step skipped due to error: {e}")
 
     # 6. Output result & Save History
     if success and news_success:
