@@ -6,6 +6,8 @@ from config import DATABASE_URL, COMPANIES_FILE
 from logger import get_logger
 from datetime import datetime, timedelta
 
+COUNTERS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'counters.json')
+
 logger = get_logger(__name__)
 
 import re
@@ -158,6 +160,13 @@ class StateManager:
                         FOREIGN KEY (tag_id) REFERENCES tags(id)
                     )
                 ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS system_counters (
+                        key TEXT PRIMARY KEY,
+                        value INTEGER NOT NULL,
+                        updated_at TIMESTAMP
+                    )
+                ''')
             conn.commit()
 
     def _load_initial_data(self):
@@ -297,6 +306,90 @@ class StateManager:
                     )
             conn.commit()
             logger.info(f"Saved vocabulary '{vocab}', proverb '{proverb}', german '{german}', finance_term '{finance_term}' to history.")
+
+    def get_next_counters(self) -> tuple[int, int]:
+        """
+        取得下一期電子報期數與下一篇商業故事篇數 (目前為 46 與 62，明天自動加 1 進位至 47 與 63)。
+        優先讀取資料庫 system_counters，若不存在則以 data/counters.json 或基準值 (46, 62) 為基礎。
+        回傳 (next_newsletter_issue, next_story_issue)
+        """
+        curr_nl = 46
+        curr_st = 62
+
+        # 嘗試從 local counters.json 讀取基準值
+        if os.path.exists(COUNTERS_FILE):
+            try:
+                with open(COUNTERS_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    curr_nl = data.get("newsletter_issue", curr_nl)
+                    curr_st = data.get("story_issue", curr_st)
+            except Exception as e:
+                logger.warning(f"讀取 {COUNTERS_FILE} 失敗: {e}")
+
+        # 嘗試從資料庫讀取並同步
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT key, value FROM system_counters WHERE key IN ('newsletter_issue', 'story_issue')")
+                    rows = dict(cursor.fetchall())
+                    
+                    if 'newsletter_issue' in rows:
+                        curr_nl = rows['newsletter_issue']
+                    else:
+                        cursor.execute(
+                            "INSERT INTO system_counters (key, value, updated_at) VALUES (%s, %s, %s) ON CONFLICT (key) DO NOTHING",
+                            ('newsletter_issue', curr_nl, datetime.now())
+                        )
+
+                    if 'story_issue' in rows:
+                        curr_st = rows['story_issue']
+                    else:
+                        cursor.execute(
+                            "INSERT INTO system_counters (key, value, updated_at) VALUES (%s, %s, %s) ON CONFLICT (key) DO NOTHING",
+                            ('story_issue', curr_st, datetime.now())
+                        )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"從資料庫讀取 system_counters 失敗，使用本機設定: {e}")
+
+        # 明天的流程順著加 1
+        return curr_nl + 1, curr_st + 1
+
+    def increment_counters(self, new_newsletter_issue: int, new_story_issue: int):
+        """
+        成功發送與完成每日流程後，更新並持久化期數與篇數 (寫入 DB 與 data/counters.json)。
+        """
+        now = datetime.now()
+        # 1. 寫入資料庫
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute('''
+                        INSERT INTO system_counters (key, value, updated_at)
+                        VALUES ('newsletter_issue', %s, %s)
+                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+                    ''', (new_newsletter_issue, now))
+                    cursor.execute('''
+                        INSERT INTO system_counters (key, value, updated_at)
+                        VALUES ('story_issue', %s, %s)
+                        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at
+                    ''', (new_story_issue, now))
+                conn.commit()
+                logger.info(f"已更新資料庫計數器: 電子報期數 #{new_newsletter_issue}, 商業故事篇數 #{new_story_issue}")
+        except Exception as e:
+            logger.error(f"寫入資料庫計數器失敗: {e}")
+
+        # 2. 寫入本地檔案 data/counters.json (供 Git commit 同步備援)
+        try:
+            os.makedirs(os.path.dirname(COUNTERS_FILE), exist_ok=True)
+            with open(COUNTERS_FILE, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "newsletter_issue": new_newsletter_issue,
+                    "story_issue": new_story_issue
+                }, f, indent=2, ensure_ascii=False)
+            logger.info(f"已同步更新 {COUNTERS_FILE}")
+        except Exception as e:
+            logger.error(f"寫入 {COUNTERS_FILE} 失敗: {e}")
 
     # --- InsightOrbit Methods ---
     def save_article_with_tags(self, article, tags_info):

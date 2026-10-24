@@ -5,324 +5,272 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ subject }}</title>
   <style>
-    /* 基礎重設與跨平台相容 */
     body {
       margin: 0;
       padding: 0;
-      background-color: #f7f9fa;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans TC", sans-serif;
-      color: #2d3748;
+      background-color: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #262626;
       -webkit-font-smoothing: antialiased;
-      line-height: 1.6;
+      line-height: 1.7;
     }
-    .wrapper {
+    .email-wrapper {
       width: 100%;
-      background-color: #f7f9fa;
+      background-color: #fafafa;
       padding: 24px 0 40px;
     }
-    .container {
-      max-width: 620px;
+    .email-container {
+      max-width: 600px;
       margin: 0 auto;
       background-color: #ffffff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-      border: 1px solid #e2e8f0;
+      border: 1px solid #e8e8e8;
+      border-radius: 4px;
+      padding: 32px 28px;
     }
-    /* 頂部刊頭 */
-    .header {
-      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-      padding: 28px 24px 22px;
+    /* 簡約報刊抬頭 */
+    .masthead {
       text-align: center;
-      color: #ffffff;
+      border-bottom: 2px solid #1a1a1a;
+      padding-bottom: 18px;
+      margin-bottom: 26px;
     }
-    .header-badge {
-      display: inline-block;
-      background: rgba(255, 153, 0, 0.2);
-      color: #ff9900;
-      border: 1px solid rgba(255, 153, 0, 0.4);
-      padding: 3px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
+    .masthead-title {
+      font-family: Georgia, "Songti TC", "Noto Serif TC", serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a1a1a;
+      letter-spacing: 1.5px;
+      margin: 0 0 6px;
     }
-    .header-title {
-      margin: 0;
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: 1px;
-      color: #ffffff;
-    }
-    .header-date {
-      margin-top: 6px;
+    .masthead-meta {
       font-size: 13px;
-      color: #94a3b8;
+      color: #737373;
+      letter-spacing: 0.5px;
     }
-    /* 內容主體區 */
-    .content {
-      padding: 28px 24px;
-    }
-    .section-title {
-      font-size: 20px;
+    /* 區塊標題 */
+    .section-title-news {
+      font-size: 18px;
       font-weight: 700;
       color: #a36200;
-      border-left: 4px solid #ff9900;
-      padding-left: 10px;
-      margin: 24px 0 16px;
-      display: flex;
-      align-items: center;
+      margin: 0 0 16px;
+      letter-spacing: 0.5px;
     }
-    .section-title:first-child {
-      margin-top: 0;
+    .section-divider {
+      border: 0;
+      height: 1px;
+      background: #eeeeee;
+      margin: 28px 0;
     }
-    /* 新聞卡片 */
-    .news-card {
-      background: #ffffff;
-      border: 1px solid #edf2f7;
-      border-radius: 10px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    /* 新聞清單項目 */
+    .news-item {
+      margin-bottom: 20px;
     }
     .news-title {
-      font-size: 17px;
+      font-size: 15.5px;
       font-weight: 700;
-      line-height: 1.45;
-      margin: 0 0 10px;
+      line-height: 1.5;
+      margin: 0 0 6px;
     }
     .news-title a {
-      color: #e67e22;
+      color: #ff9900;
       text-decoration: none;
     }
     .news-title a:hover {
       text-decoration: underline;
     }
-    .news-impact {
-      background-color: #f0f7ff;
-      border-left: 3px solid #256ee1;
-      padding: 8px 12px;
-      border-radius: 4px;
+    .news-detail-group {
+      margin: 6px 0 0 16px;
       font-size: 14px;
-      color: #256ee1;
-      margin-bottom: 10px;
-      line-height: 1.5;
+      color: #404040;
     }
-    .news-summary {
-      font-size: 14px;
-      color: #4a5568;
+    .news-detail-row {
+      margin: 4px 0;
       line-height: 1.6;
-      margin: 0 0 10px;
     }
-    .tags-container {
-      margin-top: 8px;
+    .impact-label {
+      font-weight: 700;
+      color: #262626;
+      font-style: italic;
     }
-    .tag-pill {
-      display: inline-block;
-      background-color: #f1f5f9;
-      color: #64748b;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 12px;
-      margin: 2px 4px 2px 0;
-      text-decoration: none;
+    .impact-text {
+      color: rgb(37, 110, 225);
+      font-style: italic;
+    }
+    .summary-label {
+      font-weight: 700;
+      color: #262626;
+      font-style: italic;
+    }
+    .summary-text {
+      font-style: italic;
+      color: #404040;
+    }
+    .news-tags {
+      margin-top: 4px;
+      font-size: 12.5px;
+      color: #8c8c8c;
     }
     /* 商業故事 */
-    .story-card {
-      background: #fafaf9;
-      border: 1px solid #e7e5e4;
-      border-radius: 10px;
-      padding: 22px 20px;
-      margin-top: 14px;
-    }
-    .story-company-header {
+    .story-container {
       text-align: center;
+      margin: 8px 0;
+    }
+    .story-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #ff9900;
       margin-bottom: 16px;
-    }
-    .story-company-name {
-      font-size: 20px;
-      font-weight: 800;
-      color: #d97706;
       display: inline-block;
-      padding-bottom: 4px;
-      border-bottom: 2px solid #f59e0b;
     }
-    .story-body {
-      color: #334155;
-      font-size: 15px;
-      line-height: 1.8;
+    .story-content {
+      font-size: 14.5px;
+      line-height: 1.85;
+      color: #333333;
+      text-align: center;
     }
-    /* 單字、德語、諺語卡片 */
-    .info-card {
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 18px 20px;
-      margin-top: 16px;
+    /* 單字、諺語、德語小教室 */
+    .academic-section {
+      text-align: center;
+      margin: 16px 0;
     }
-    .info-card-header {
+    .academic-header {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: #ff9900;
+      margin-bottom: 12px;
+    }
+    .academic-header-dark {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: #262626;
+      margin-bottom: 12px;
+    }
+    .academic-word {
       font-size: 16px;
       font-weight: 700;
-      color: #d97706;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
+      color: #1a1a1a;
+      margin-bottom: 8px;
     }
-    .word-highlight {
-      font-size: 18px;
-      font-weight: 800;
-      color: #1e293b;
-    }
-    .word-pos {
-      font-size: 14px;
-      color: #64748b;
-      font-style: italic;
-      margin-left: 4px;
-    }
-    .word-pron {
-      color: #94a3b8;
-      font-size: 14px;
-      margin-left: 6px;
-    }
-    .definition-box {
-      color: #2563eb;
+    .academic-def {
+      color: rgb(37, 110, 225);
       font-size: 14px;
       margin: 8px 0;
-      line-height: 1.5;
-    }
-    .example-box {
-      background: #f8fafc;
-      border-left: 3px solid #cbd5e1;
-      padding: 8px 12px;
-      font-size: 13.5px;
-      color: #334155;
-      font-style: italic;
-      margin-top: 8px;
-      border-radius: 0 4px 4px 0;
-    }
-    .proverb-text {
-      font-size: 16px;
-      font-weight: 700;
-      color: #1e293b;
-      font-style: italic;
-      margin-bottom: 10px;
-    }
-    .proverb-section-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #2563eb;
-      margin-top: 8px;
-    }
-    .proverb-section-content {
-      font-size: 14px;
-      color: #475569;
       line-height: 1.6;
     }
-    /* 頁尾 */
-    .footer {
-      background-color: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-      padding: 24px;
+    .academic-subhead {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #262626;
+      margin: 10px 0 4px;
+    }
+    .academic-ex {
+      font-size: 13.5px;
+      font-style: italic;
+      color: #404040;
+      line-height: 1.6;
+    }
+    .proverb-quote {
+      font-size: 15px;
+      font-weight: 700;
+      font-style: italic;
+      color: #1a1a1a;
+      margin-bottom: 12px;
+    }
+    .proverb-row {
+      max-width: 520px;
+      margin: 6px auto;
       text-align: center;
-      color: #94a3b8;
-      font-size: 13px;
+      font-size: 13.5px;
+      color: #404040;
+      line-height: 1.6;
     }
-    .footer-links {
-      margin-top: 10px;
+    .proverb-label {
+      color: rgb(37, 110, 225);
+      font-weight: 700;
+      font-style: italic;
     }
-    .footer-links a {
-      color: #ff9900;
-      text-decoration: none;
-      font-weight: 600;
-      margin: 0 8px;
-    }
-    .footer-links a:hover {
-      text-decoration: underline;
-    }
-    .divider {
-      border: 0;
-      height: 1px;
-      background: #e2e8f0;
-      margin: 28px 0;
+    /* 簡約頁尾 */
+    .email-footer {
+      text-align: center;
+      color: #a3a3a3;
+      font-size: 12px;
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #eeeeee;
+      letter-spacing: 0.5px;
     }
   </style>
 </head>
 <body>
-  <div class="wrapper">
-    <div class="container">
-      <!-- 頂部刊頭 -->
-      <div class="header">
-        <div class="header-badge">每日快訊與成長</div>
-        <h1 class="header-title">【每日時務商報】</h1>
-        <div class="header-date">{{ issue_title }} · {{ date }}</div>
+  <div class="email-wrapper">
+    <div class="email-container">
+      <!-- 頂部報頭 -->
+      <div class="masthead">
+        <div class="masthead-title">【每日時務商報】</div>
+        <div class="masthead-meta">第 {{ issue_number }} 期 · {{ date }} · 每日快訊與成長</div>
       </div>
 
-      <div class="content">
-        <!-- ===== 每日重大新聞快訊 Top 3 ===== -->
-        <div class="section-title">每日重大新聞快訊 Top 3</div>
+      <!-- ===== 每日重大新聞快訊 Top 3 ===== -->
+      <div class="section-title-news">每日重大新聞快訊 Top 3</div>
+      <div class="news-list">
         {{ news_items_html }}
+      </div>
 
-        <hr class="divider">
+      <hr class="section-divider">
 
-        <!-- ===== 商業故事 ===== -->
-        <div class="section-title">今日深度商業故事</div>
-        <div class="story-card">
-          <div class="story-company-header">
-            <span class="story-company-name">商業故事：{{ company_name }}</span>
-          </div>
-          <div class="story-body">
-            {{ story_html }}
-          </div>
+      <!-- ===== 商業故事 ===== -->
+      <div class="story-container">
+        <div class="story-title">商業故事#{{ story_number }}：{{ company_name }}</div>
+        <div class="story-content">
+          {{ story_html }}
         </div>
+      </div>
 
-        <hr class="divider">
+      <hr class="section-divider">
 
-        <!-- ===== 今日商務單字 ===== -->
-        <div class="info-card">
-          <div class="info-card-header">💡【今日商務單字】</div>
-          <div>
-            <span class="word-highlight">{{ vocab_word }}</span>
-            <span class="word-pos">({{ vocab_pos }})</span>
-            <span class="word-pron">// {{ vocab_pron }} //</span>
-          </div>
-          <div class="definition-box">{{ vocab_def }}</div>
-          <div class="example-box">
-            <strong>例句：</strong>{{ vocab_ex }}
-          </div>
+      <!-- ===== 今日商務單字 ===== -->
+      <div class="academic-section">
+        <div class="academic-header">【今日商務單字】</div>
+        <div class="academic-word">
+          <i>{{ vocab_word }}</i> ({{ vocab_pos }}) // {{ vocab_pron }} //
         </div>
+        <div class="academic-def">{{ vocab_def }}</div>
+        <div class="academic-subhead">【例句】</div>
+        <div class="academic-ex">{{ vocab_ex }}</div>
+      </div>
 
-        <!-- ===== 今日商業諺語 ===== -->
-        <div class="info-card">
-          <div class="info-card-header">📜【今日商業 / 處世諺語】</div>
-          <div class="proverb-text">"{{ proverb_text }}"</div>
-          <div class="proverb-section-title">👉 解析：</div>
-          <div class="proverb-section-content">{{ proverb_exp }}</div>
-          <div class="proverb-section-title">👉 應用：</div>
-          <div class="proverb-section-content">{{ proverb_usage }}</div>
-        </div>
+      <hr class="section-divider">
 
-        <!-- ===== 德語小教室 ===== -->
-        <div class="info-card">
-          <div class="info-card-header">🇩🇪【德語小教室】</div>
-          <div>
-            <span class="word-highlight">{{ german_word }}</span>
-            <span class="word-pos">({{ german_pos }})</span>
-            <span class="word-pron">/ {{ german_pron }} /</span>
-          </div>
-          <div class="definition-box">{{ german_def }}</div>
-          <div class="example-box">
-            <strong>例句：</strong>{{ german_ex }}
-          </div>
+      <!-- ===== 今日商業／處世諺語 ===== -->
+      <div class="academic-section">
+        <div class="academic-header-dark">【今日商業／處世諺語】</div>
+        <div class="proverb-quote">
+          {{ proverb_text }}
         </div>
+        <div class="proverb-row">
+          <span class="proverb-label">解析：</span>{{ proverb_exp }}
+        </div>
+        <div class="proverb-row">
+          <span class="proverb-label">應用：</span>{{ proverb_usage }}
+        </div>
+      </div>
+
+      <hr class="section-divider">
+
+      <!-- ===== 德語小教室 ===== -->
+      <div class="academic-section">
+        <div class="academic-header-dark">【德語小教室】</div>
+        <div class="academic-word">
+          <i>{{ german_word }}</i> ({{ german_pos }}) / {{ german_pron }} /
+        </div>
+        <div class="academic-def">{{ german_def }}</div>
+        <div class="academic-subhead">【例句】</div>
+        <div class="academic-ex">{{ german_ex }}</div>
       </div>
 
       <!-- 頁尾 -->
-      <div class="footer">
-        <div>【每日時務商報】· InsightOrbit 自動化生成系統</div>
-        <div class="footer-links">
-          <a href="https://yaodechiang4181.github.io/Post-auto-generator/" target="_blank">🪐 前往 InsightOrbit 知識圖譜面板</a>
-        </div>
+      <div class="email-footer">
+        每日時務商報 · 第 {{ issue_number }} 期 · {{ date }}
       </div>
     </div>
   </div>

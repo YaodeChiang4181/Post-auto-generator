@@ -73,53 +73,56 @@ class TestGmailNewsletter(unittest.TestCase):
         self.assertIn('https://www.googleapis.com/auth/gmail.compose', SCOPES)
 
     def test_build_email_html_content_and_subject(self):
-        """驗證 HTML 電子報生成與標題格式"""
-        html = build_email_html(self.sample_story_data, self.sample_news_data, issue_number=19)
+        """驗證 HTML 電子報生成、極簡風格(無 Emoji)與標題格式"""
+        html = build_email_html(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
         self.assertIn("【每日時務商報】", html)
-        self.assertIn("第 19 期", html)
-        self.assertIn("台積電（2330）", html)
+        self.assertIn("第 47 期", html)
+        self.assertIn("商業故事#63：台積電（2330）", html)
         self.assertIn("輝達新一代 AI 晶片架構震撼發表", html)
         self.assertIn("die Halbleiterindustrie", html)
         self.assertIn("paradigm", html)
-        # 驗證標籤膠囊化
-        self.assertIn('<span class="tag-pill">#人工智慧</span>', html)
+        # 驗證無 Emoji 出現
+        for emoji in ["💡", "📜", "🇩🇪", "🚀", "🪐", "👉"]:
+            self.assertNotIn(emoji, html)
 
     def test_build_email_plaintext(self):
-        """驗證 Plain Text 降級內容"""
-        text = build_email_plaintext(self.sample_story_data, self.sample_news_data, issue_number=19)
-        self.assertIn("【每日時務商報#19】", text)
+        """驗證 Plain Text 降級內容與標題"""
+        text = build_email_plaintext(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertIn("【每日時務商報#47】－每日快訊與成長", text)
+        self.assertIn("商業故事#63：台積電（2330）", text)
         self.assertIn("1. 輝達新一代 AI 晶片架構震撼發表", text)
         self.assertIn("【今日商務單字】", text)
         self.assertIn("die Halbleiterindustrie", text)
+        for emoji in ["💡", "📜", "🇩🇪", "🚀", "🪐", "👉"]:
+            self.assertNotIn(emoji, text)
 
     @patch('modules.gmail_sender.create_gmail_draft')
     def test_send_newsletter_draft_mode(self, mock_create_draft):
         """驗證未啟用 EMAIL_AUTO_SEND 時，自動切換至建立草稿"""
         mock_create_draft.return_value = True
         with patch.dict(os.environ, {"EMAIL_AUTO_SEND": "false", "NEWSLETTER_RECIPIENTS": "test@example.com"}):
-            res = send_newsletter(self.sample_story_data, self.sample_news_data)
+            res = send_newsletter(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
             self.assertEqual(res["mode"], "draft")
             self.assertTrue(res["success"])
-            self.assertTrue(res["subject"].startswith("【每日時務商報】"))
+            self.assertEqual(res["subject"], "【每日時務商報#47】－每日快訊與成長")
             mock_create_draft.assert_called_once()
 
     @patch('modules.gmail_sender.send_email_message')
     def test_send_newsletter_auto_send_individual(self, mock_send_email):
         """驗證啟用 EMAIL_AUTO_SEND 時，支援英文逗號、中文逗號與分號混用之名單解析"""
         mock_send_email.return_value = True
-        # 測試英文半形逗號、中文全形逗號、分號混用
         recipients = "user1@example.com, user2@example.com，user3@example.com;user4@example.com"
         with patch.dict(os.environ, {
             "EMAIL_AUTO_SEND": "true",
             "NEWSLETTER_RECIPIENTS": recipients,
             "EMAIL_SEND_MODE": "individual"
         }):
-            res = send_newsletter(self.sample_story_data, self.sample_news_data, issue_number=20)
+            res = send_newsletter(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
             self.assertEqual(res["mode"], "sent")
             self.assertTrue(res["success"])
             self.assertEqual(res["sent_count"], 4)
             self.assertEqual(mock_send_email.call_count, 4)
-            self.assertIn("【每日時務商報#20】", res["subject"])
+            self.assertEqual(res["subject"], "【每日時務商報#47】－每日快訊與成長")
 
     @patch('modules.gmail_sender.create_gmail_draft')
     @patch('modules.gmail_sender.send_email_message')
@@ -132,9 +135,10 @@ class TestGmailNewsletter(unittest.TestCase):
             "NEWSLETTER_RECIPIENTS": "user@example.com",
             "EMAIL_SEND_MODE": "individual"
         }):
-            res = send_newsletter(self.sample_story_data, self.sample_news_data)
+            res = send_newsletter(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
             self.assertEqual(res["mode"], "draft_fallback")
             self.assertTrue(res["success"])
+            self.assertEqual(res["subject"], "【每日時務商報#47】－每日快訊與成長")
             mock_create_draft.assert_called_once()
 
 if __name__ == "__main__":

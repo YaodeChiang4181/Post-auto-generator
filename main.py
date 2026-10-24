@@ -112,6 +112,10 @@ def main():
     if success and news_success:
         logger.info("Processing Gmail newsletter (Direct send or Draft)...")
         try:
+            # 取得下一期期數與篇數 (目前 46、62，自動進位為 47 與 63)
+            next_nl_issue, next_st_issue = state_manager.get_next_counters()
+            logger.info(f"Preparing newsletter issue #{next_nl_issue}, story #{next_st_issue}")
+
             # 組合 story_data 傳入 gmail_sender
             story_data_for_gmail = {
                 "company_name": company['name'],
@@ -120,12 +124,20 @@ def main():
                 "proverb": json_data.get("proverb", {}) if json_data else {},
                 "german": json_data.get("german_vocab", {}) if json_data else {},
             }
-            gmail_res = send_newsletter(story_data_for_gmail, processed_news_data)
+            gmail_res = send_newsletter(
+                story_data_for_gmail, 
+                processed_news_data, 
+                issue_number=next_nl_issue, 
+                story_number=next_st_issue
+            )
             if gmail_res.get("success"):
                 if gmail_res.get("mode") == "sent":
                     logger.info(f"Gmail newsletter sent successfully to {gmail_res.get('sent_count')}/{gmail_res.get('total_recipients')} recipients.")
                 else:
                     logger.info(f"Gmail draft created successfully: {gmail_res.get('subject')}")
+
+                # 發送或建立草稿成功後，持久化計數器進位 (+1)
+                state_manager.increment_counters(next_nl_issue, next_st_issue)
             else:
                 logger.warning("Gmail newsletter step completed with errors (non-critical, continuing).")
         except Exception as e:

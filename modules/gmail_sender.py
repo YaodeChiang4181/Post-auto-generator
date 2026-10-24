@@ -77,15 +77,16 @@ def _get_gmail_service():
     return service
 
 
-def build_email_html(story_data: dict, news_data: dict, issue_number: int = None, subject: str = None) -> str:
+def build_email_html(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, subject: str = None) -> str:
     """
-    組合【每日時務商報】現代化響應式 HTML 電子報內容。
+    組合【每日時務商報】極簡人文風 HTML 電子報內容 (無 Emoji、無 AI 產出感)。
     優先使用 templates/email_newsletter.html 模板。
     """
     today_str = datetime.now().strftime("%Y/%m/%d")
     company_name = story_data.get("company_name", "")
-    issue_title = f"第 {issue_number} 期" if issue_number else "今日商報"
-    actual_subject = subject or (f"【每日時務商報#{issue_number}】｜{today_str}" if issue_number else f"【每日時務商報】｜{today_str}")
+    issue_num = issue_number or 47
+    story_num = story_number or 63
+    actual_subject = subject or f"【每日時務商報#{issue_num}】－每日快訊與成長"
 
     # --- 新聞區段 HTML ---
     news_items_html = ""
@@ -97,22 +98,21 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
         summary = item.get("summary", "")
         tags = item.get("tags", [])
         
-        tags_html = "".join([f'<span class="tag-pill">#{t.get("name", t)}</span>' for t in tags])
+        tags_str = "　".join([f"#{t.get('name', t)}" for t in tags])
 
         news_items_html += f"""
-        <div class="news-card">
+        <div class="news-item">
           <div class="news-title">
-            <span style="color:#e67e22;font-weight:bold;margin-right:4px;">{rank}.</span>
-            <a href="{url}" target="_blank">{title}</a>
+            {rank}. <a href="{url}" target="_blank">{title}</a>
           </div>
-          <div class="news-impact">
-            <strong>影響：</strong>{impact}
-          </div>
-          <div class="news-summary">
-            <strong>摘要：</strong>{summary}
-          </div>
-          <div class="tags-container">
-            {tags_html}
+          <div class="news-detail-group">
+            <div class="news-detail-row">
+              <span class="impact-label">影響：</span><span class="impact-text">{impact}</span>
+            </div>
+            <div class="news-detail-row">
+              <span class="summary-label">摘要：</span><span class="summary-text">{summary}</span>
+            </div>
+            <div class="news-tags">{tags_str}</div>
           </div>
         </div>
         """
@@ -121,21 +121,29 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
     story_raw = story_data.get("story", "")
     story_lines = story_raw.split("\n")
     story_html_lines = []
+    
+    first_non_empty = True
     for line in story_lines:
         stripped = line.strip()
         if not stripped:
             story_html_lines.append("<br>")
             continue
 
+        # 若第一行已包含「商業故事」標題，略過以避免與模板重複
+        if first_non_empty and ("商業故事" in stripped):
+            first_non_empty = False
+            continue
+        first_non_empty = False
+
         is_hashtag = stripped.startswith("#")
-        # 處理粗體與斜體
+        # 處理粗體與斜體 (復刻經典排版：重點藍色斜體)
         stripped = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', stripped)
-        stripped = re.sub(r'\*(.*?)\*', r'<span style="color:#2563eb"><i>\1</i></span>', stripped)
-        stripped = re.sub(r'\b_(.*?)_\b', r'<span style="color:#2563eb"><i>\1</i></span>', stripped)
+        stripped = re.sub(r'\*(.*?)\*', r'<span style="color:rgb(37, 110, 225)"><i>\1</i></span>', stripped)
+        stripped = re.sub(r'\b_(.*?)_\b', r'<span style="color:rgb(37, 110, 225)"><i>\1</i></span>', stripped)
 
         if is_hashtag:
             story_html_lines.append(
-                f'<div style="text-align:center;margin-top:12px;"><b><font color="#10b981">{stripped}</font></b></div>'
+                f'<div style="text-align:center;margin-top:14px;"><b><font color="#93c47d">{stripped}</font></b></div>'
             )
         else:
             story_html_lines.append(
@@ -172,7 +180,8 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
 
             replacements = {
                 "{{ subject }}": actual_subject,
-                "{{ issue_title }}": issue_title,
+                "{{ issue_number }}": str(issue_num),
+                "{{ story_number }}": str(story_num),
                 "{{ date }}": today_str,
                 "{{ news_items_html }}": news_items_html,
                 "{{ company_name }}": company_name,
@@ -197,43 +206,62 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
         except Exception as e:
             logger.warning(f"讀取 HTML 模板失敗，切換內建版面: {e}")
 
-    # 內建備用版面
+    # 內建備用版面 (無 Emoji、極簡排版)
     return f"""
-    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;line-height:1.6;color:#333;">
-      <h1 style="color:#d97706;text-align:center;">{actual_subject}</h1>
-      <p style="text-align:center;color:#666;">{today_str}</p>
-      <hr style="border:none;border-top:2px solid #f59e0b;margin:20px 0;">
-      <h2>每日重大新聞快訊 Top 3</h2>
+    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;line-height:1.7;color:#333;">
+      <div style="text-align:center;border-bottom:2px solid #222;padding-bottom:12px;margin-bottom:20px;">
+        <h1 style="font-size:22px;color:#222;margin:0;">【每日時務商報】</h1>
+        <div style="font-size:12px;color:#666;">第 {issue_num} 期 · {today_str} · 每日快訊與成長</div>
+      </div>
+      <h2 style="color:#a36200;font-size:18px;">每日重大新聞快訊 Top 3</h2>
       {news_items_html}
-      <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
-      <h2>商業故事：{company_name}</h2>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <span style="font-size:17px;font-weight:bold;color:#ff9900;">商業故事#{story_num}：{company_name}</span>
+      </div>
       {story_html}
-      <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
-      <h3>💡 今日商務單字: {vocab_word} ({vocab_pos})</h3>
-      <p>{vocab_def}</p>
-      <p><em>{vocab_ex}</em></p>
-      <h3>📜 今日商業諺語</h3>
-      <p><strong>{proverb_text}</strong></p>
-      <p>{proverb_exp}</p>
-      <h3>🇩🇪 德語小教室: {german_word} ({german_pos})</h3>
-      <p>{german_def}</p>
-      <p><em>{german_ex}</em></p>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+      <div style="text-align:center;">
+        <div style="font-weight:bold;color:#ff9900;margin-bottom:8px;">【今日商務單字】</div>
+        <p><b><i>{vocab_word}</i></b> ({vocab_pos}) // {vocab_pron} //</p>
+        <p style="color:rgb(37,110,225);">{vocab_def}</p>
+        <p><b>【例句】</b><br><i>{vocab_ex}</i></p>
+      </div>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+      <div style="text-align:center;">
+        <div style="font-weight:bold;margin-bottom:8px;">【今日商業／處世諺語】</div>
+        <p><b><i>{proverb_text}</i></b></p>
+        <p><span style="color:rgb(37,110,225);font-weight:bold;">解析：</span>{proverb_exp}</p>
+        <p><span style="color:rgb(37,110,225);font-weight:bold;">應用：</span>{proverb_usage}</p>
+      </div>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+      <div style="text-align:center;">
+        <div style="font-weight:bold;margin-bottom:8px;">【德語小教室】</div>
+        <p><b><i>{german_word}</i></b> ({german_pos}) / {german_pron} /</p>
+        <p style="color:rgb(37,110,225);">{german_def}</p>
+        <p><b>【例句】</b><br><i>{german_ex}</i></p>
+      </div>
+      <div style="text-align:center;color:#999;font-size:12px;margin-top:28px;">
+        每日時務商報 · 第 {issue_num} 期 · {today_str}
+      </div>
     </div>
     """
 
 
-def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int = None, subject: str = None) -> str:
-    """產生標準純文字版本 (Plain Text Fallback)"""
+def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, subject: str = None) -> str:
+    """產生標準純文字版本 (Plain Text Fallback，簡約、無 Emoji)"""
     today_str = datetime.now().strftime("%Y/%m/%d")
     company_name = story_data.get("company_name", "")
-    actual_subject = subject or (f"【每日時務商報#{issue_number}】｜{today_str}" if issue_number else f"【每日時務商報】｜{today_str}")
+    issue_num = issue_number or 47
+    story_num = story_number or 63
+    actual_subject = subject or f"【每日時務商報#{issue_num}】－每日快訊與成長"
 
     lines = [
         f"========================================",
         f" {actual_subject}",
-        f" 日期：{today_str}",
+        f" 第 {issue_num} 期 · 日期：{today_str}",
         f"========================================\n",
-        f"【每日重大新聞快訊 Top 3】\n"
+        f"每日重大新聞快訊 Top 3\n"
     ]
 
     for idx, item in enumerate(news_data.get("top_news", []), 1):
@@ -242,7 +270,7 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
         lines.append(f"   影響: {item.get('impact_reason', '')}")
         lines.append(f"   摘要: {item.get('summary', '')}\n")
 
-    lines.append(f"\n【今日深度商業故事：{company_name}】\n")
+    lines.append(f"\n商業故事#{story_num}：{company_name}\n")
     lines.append(story_data.get("story", "").strip())
 
     vocab = story_data.get("vocab", {})
@@ -252,7 +280,7 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
     lines.append(f"例句：{vocab.get('example', '')}")
 
     proverb = story_data.get("proverb", {})
-    lines.append(f"\n【今日商業/處世諺語】")
+    lines.append(f"\n【今日商業／處世諺語】")
     lines.append(f"{proverb.get('text', '')}")
     lines.append(f"解析：{proverb.get('explanation', '')}")
     lines.append(f"應用：{proverb.get('usage', '')}")
@@ -264,7 +292,7 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
     lines.append(f"例句：{german.get('example', '')}")
 
     lines.append(f"\n----------------------------------------")
-    lines.append("【每日時務商報】· InsightOrbit 自動化生成系統")
+    lines.append(f"每日時務商報 · 第 {issue_num} 期 · {today_str}")
 
     return "\n".join(lines)
 
@@ -334,7 +362,7 @@ def create_gmail_draft(subject: str, html_body: str, plain_body: str = None) -> 
         return False
 
 
-def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None) -> dict:
+def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None) -> dict:
     """
     【每日時務商報】整合發信入口：
     依據環境變數 (EMAIL_AUTO_SEND) 與收件人清單自動判定直接發送或建立草稿。
@@ -349,16 +377,22 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None)
             "subject": str
         }
     """
-    today_str = datetime.now().strftime("%Y/%m/%d")
+    # 若外部未傳入期數或故事篇數，自動透過 StateManager 取得下一期
+    if issue_number is None or story_number is None:
+        try:
+            from modules.state_manager import StateManager
+            sm = StateManager()
+            next_nl, next_st = sm.get_next_counters()
+            issue_number = issue_number or next_nl
+            story_number = story_number or next_st
+        except Exception:
+            issue_number = issue_number or 47
+            story_number = story_number or 63
 
-    # 確保信件標題格式標準化為【每日時務商報】
-    if issue_number:
-        subject = f"【每日時務商報#{issue_number}】｜{today_str}"
-    else:
-        subject = f"【每日時務商報】｜{today_str}"
+    subject = f"【每日時務商報#{issue_number}】－每日快訊與成長"
 
-    html_body = build_email_html(story_data, news_data, issue_number, subject)
-    plain_body = build_email_plaintext(story_data, news_data, issue_number, subject)
+    html_body = build_email_html(story_data, news_data, issue_number, story_number, subject)
+    plain_body = build_email_plaintext(story_data, news_data, issue_number, story_number, subject)
 
     auto_send = os.getenv("EMAIL_AUTO_SEND", "false").lower() in ("true", "1", "yes")
     recipients_str = os.getenv("NEWSLETTER_RECIPIENTS", "")
@@ -369,7 +403,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None)
 
     # 若開啟自動發信且有設定收件人
     if auto_send and recipients:
-        logger.info(f"🚀 開始自動寄送電子報: {subject}，目標收件人數: {len(recipients)}")
+        logger.info(f"開始自動寄送電子報: {subject}，目標收件人數: {len(recipients)}")
         sent_count = 0
 
         if send_mode == "bcc":
@@ -384,7 +418,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None)
                     sent_count += 1
 
         if sent_count > 0:
-            logger.info(f"✅ 電子報自動發送成功！成功寄出: {sent_count}/{len(recipients)}")
+            logger.info(f"電子報自動發送成功！成功寄出: {sent_count}/{len(recipients)}")
             return {
                 "mode": "sent",
                 "success": True,
@@ -393,7 +427,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None)
                 "subject": subject
             }
         else:
-            logger.warning("⚠️ 自動發信失敗，立即安全降級為建立 Gmail 草稿...")
+            logger.warning("自動發信失敗，立即安全降級為建立 Gmail 草稿...")
             draft_ok = create_gmail_draft(subject, html_body, plain_body)
             return {
                 "mode": "draft_fallback",
@@ -404,7 +438,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None)
             }
 
     # 未開啟自動發信或無收件人名單 -> 建立草稿 (既有安全模式)
-    logger.info(f"📝 未開啟 EMAIL_AUTO_SEND 或無收件人名單，建立 Gmail 草稿: {subject}")
+    logger.info(f"未開啟 EMAIL_AUTO_SEND 或無收件人名單，建立 Gmail 草稿: {subject}")
     draft_ok = create_gmail_draft(subject, html_body, plain_body)
     return {
         "mode": "draft",
@@ -415,7 +449,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None)
     }
 
 
-def send_newsletter_as_draft(story_data: dict, news_data: dict, issue_number: int = None) -> bool:
+def send_newsletter_as_draft(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None) -> bool:
     """向後相容輔助函式"""
-    res = send_newsletter(story_data, news_data, issue_number)
+    res = send_newsletter(story_data, news_data, issue_number, story_number)
     return res.get("success", False)

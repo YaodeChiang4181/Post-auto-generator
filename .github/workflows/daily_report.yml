@@ -56,15 +56,15 @@ jobs:
         echo "========================"
         python main.py
 
-    - name: 🌐 Commit and push static docs for GitHub Pages
+    - name: 🌐 Commit and push static docs and counters
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add docs/
+        git add docs/ data/counters.json
         if git diff --staged --quiet; then
-          echo "No static docs changes to commit"
+          echo "No static docs or counters changes to commit"
         else
-          git commit -m "chore(pages): auto-update static orbit data [skip ci]"
+          git commit -m "chore(pages): auto-update static orbit data and counters [skip ci]"
           git push
         fi
 
