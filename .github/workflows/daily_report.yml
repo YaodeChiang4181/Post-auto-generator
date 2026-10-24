@@ -29,8 +29,8 @@ jobs:
 
     - name: 📧 Restore Gmail OAuth credentials
       env:
-        GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
-        GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
+        GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS_JSON || secrets.GMAIL_CREDENTIALS }}
+        GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN_JSON || secrets.GMAIL_TOKEN }}
       if: ${{ env.GMAIL_CREDENTIALS != '' && env.GMAIL_TOKEN != '' }}
       run: |
         echo "$GMAIL_CREDENTIALS" > credentials.json
