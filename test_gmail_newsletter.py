@@ -105,9 +105,10 @@ class TestGmailNewsletter(unittest.TestCase):
 
     @patch('modules.gmail_sender.send_email_message')
     def test_send_newsletter_auto_send_individual(self, mock_send_email):
-        """驗證啟用 EMAIL_AUTO_SEND 時，逐封發信至收件人清單"""
+        """驗證啟用 EMAIL_AUTO_SEND 時，支援英文逗號、中文逗號與分號混用之名單解析"""
         mock_send_email.return_value = True
-        recipients = "user1@example.com, user2@example.com"
+        # 測試英文半形逗號、中文全形逗號、分號混用
+        recipients = "user1@example.com, user2@example.com，user3@example.com;user4@example.com"
         with patch.dict(os.environ, {
             "EMAIL_AUTO_SEND": "true",
             "NEWSLETTER_RECIPIENTS": recipients,
@@ -116,8 +117,8 @@ class TestGmailNewsletter(unittest.TestCase):
             res = send_newsletter(self.sample_story_data, self.sample_news_data, issue_number=20)
             self.assertEqual(res["mode"], "sent")
             self.assertTrue(res["success"])
-            self.assertEqual(res["sent_count"], 2)
-            self.assertEqual(mock_send_email.call_count, 2)
+            self.assertEqual(res["sent_count"], 4)
+            self.assertEqual(mock_send_email.call_count, 4)
             self.assertIn("【每日時務商報#20】", res["subject"])
 
     @patch('modules.gmail_sender.create_gmail_draft')

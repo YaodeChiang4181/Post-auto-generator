@@ -364,7 +364,8 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None)
     recipients_str = os.getenv("NEWSLETTER_RECIPIENTS", "")
     send_mode = os.getenv("EMAIL_SEND_MODE", "individual").lower()  # "individual" 或 "bcc"
 
-    recipients = [r.strip() for r in recipients_str.split(",") if r.strip()]
+    # 支援半形逗號 (,)、中文全形逗號 (，)、分號 (;) 或換行，防止輸入格式問題
+    recipients = [r.strip() for r in re.split(r'[,，;\n\r]+', recipients_str) if r.strip()]
 
     # 若開啟自動發信且有設定收件人
     if auto_send and recipients:
