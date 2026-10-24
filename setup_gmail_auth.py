@@ -73,6 +73,7 @@ if choice == '1':
         SCOPES,
         redirect_uri=REDIRECT_URI
     )
+    flow.autogenerate_code_verifier = False
     auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline')
 
     print()
@@ -93,7 +94,7 @@ if choice == '1':
     print()
     print("步驟 2：請將跳轉後的完整網址（或 code 授權碼）貼在下方：")
     
-    user_input = input("👉 貼上網址或授權碼: ").strip()
+    user_input = input("👉 貼上網址或授權碼: ").strip().strip('"\'')
     if not user_input:
         print("❌ 未輸入任何內容，授權中止。")
         sys.exit(1)
