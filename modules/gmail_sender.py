@@ -297,6 +297,21 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
     return "\n".join(lines)
 
 
+_cached_sender_email = None
+
+def _get_sender_email(service) -> str:
+    """取得當前已授權使用者的 Gmail 地址，供 From 標頭使用以防被郵件伺服器誤判為垃圾信"""
+    global _cached_sender_email
+    if _cached_sender_email:
+        return _cached_sender_email
+    try:
+        profile = service.users().getProfile(userId='me').execute()
+        _cached_sender_email = profile.get('emailAddress', 'me')
+        return _cached_sender_email
+    except Exception:
+        return 'me'
+
+
 def send_email_message(subject: str, html_body: str, to_email: str = None, bcc_emails: list = None, plain_body: str = None) -> bool:
     """
     透過 Gmail API 直接發送一封電子郵件 (支援 HTML 與 Plain Text 雙相容)。
@@ -309,7 +324,13 @@ def send_email_message(subject: str, html_body: str, to_email: str = None, bcc_e
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = 'me'
+
+        # 使用標準 RFC 5322 格式寄件者標頭 (符合 SPF/DKIM/DMARC 規範，大幅降低被分類為垃圾信之機率)
+        sender_email = _get_sender_email(service)
+        if sender_email and sender_email != 'me':
+            msg['From'] = f"每日時務商報 <{sender_email}>"
+        else:
+            msg['From'] = 'me'
 
         if to_email:
             msg['To'] = to_email
@@ -394,12 +415,17 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None,
     html_body = build_email_html(story_data, news_data, issue_number, story_number, subject)
     plain_body = build_email_plaintext(story_data, news_data, issue_number, story_number, subject)
 
-    auto_send = os.getenv("EMAIL_AUTO_SEND", "false").lower() in ("true", "1", "yes")
-    recipients_str = os.getenv("NEWSLETTER_RECIPIENTS", "")
-    send_mode = os.getenv("EMAIL_SEND_MODE", "individual").lower()  # "individual" 或 "bcc"
+    auto_send = os.getenv("EMAIL_AUTO_SEND", "false").strip().strip("'\"").lower() in ("true", "1", "yes")
+    recipients_str = os.getenv("NEWSLETTER_RECIPIENTS", "").strip().strip("'\"")
+    send_mode = os.getenv("EMAIL_SEND_MODE", "individual").strip().strip("'\"").lower()  # "individual" 或 "bcc"
 
-    # 支援半形逗號 (,)、中文全形逗號 (，)、分號 (;) 或換行，防止輸入格式問題
-    recipients = [r.strip() for r in re.split(r'[,，;\n\r]+', recipients_str) if r.strip()]
+    # 支援半形逗號 (,)、中文全形逗號 (，)、分號 (;) 或換行，防止輸入格式問題，並去除引號與前後空白
+    recipients = [r.strip().strip("'\"") for r in re.split(r'[,，;\n\r]+', recipients_str) if r.strip().strip("'\"")]
+
+    logger.info(f"[Newsletter Sender] auto_send={auto_send}, recipients_count={len(recipients)}, send_mode={send_mode}")
+    if recipients:
+        masked_recipients = [r[:3] + "***" + r[r.find("@"):] if "@" in r else r for r in recipients]
+        logger.info(f"[Newsletter Sender] 目標名單: {', '.join(masked_recipients)}")
 
     # 若開啟自動發信且有設定收件人
     if auto_send and recipients:

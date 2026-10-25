@@ -58,6 +58,10 @@
 - `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **【每日時務商報】發信通道診斷強化、RFC 5322 標準寄件者標頭與防垃圾信優化 (Delivery Diagnostics & Anti-Spam Optimization)**:
+  * **RFC 5322 標準寄件者標頭**：修正過往 `From: me` 原始標頭容易被 Gmail 與各家收件伺服器誤判為格式異常或釣魚垃圾信的問題，改為自動取得授權帳號並格式化為標準 `From: 每日時務商報 <user@gmail.com>`，大幅提升主收件匣（Inbox）投遞率。
+  * **環境變數強固化清洗**：針對 GitHub Secrets 輸入變數時可能夾帶之外層單雙引號（如 `"true"` 或 `'user@gmail.com'`），在 `modules/gmail_sender.py` 加入全面去除引號與前後空白處理，避免布林值判定失效。
+  * **工作流預檢診斷強化**：在 `.github/workflows/daily_report.yml` 與 `main.py` 注入去識別化（Masked）之發信預檢日誌，清晰記錄 `EMAIL_AUTO_SEND` 狀態、收件人數量與發送結果，便於追蹤每日無人值守排程的發信管道狀態。
 * **【每日時務商報】極簡人文風排版與期數篇數自動加一進位系統 (Minimalist Editorial Styling & Auto-incrementing Counters)**:
   * **信件標題與故事篇數繼承推進**：
     * 遵循原有名稱結構，標題格式標準化為「`【每日時務商報#{issue_number}】－每日快訊與成長`」。

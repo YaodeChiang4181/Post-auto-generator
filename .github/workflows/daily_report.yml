@@ -53,6 +53,9 @@ jobs:
         echo "=== Pre-flight check ==="
         echo "credentials.json exists: $(test -f credentials.json && echo YES || echo NO)"
         echo "token.json exists: $(test -f token.json && echo YES || echo NO)"
+        echo "EMAIL_AUTO_SEND: '${EMAIL_AUTO_SEND}'"
+        echo "EMAIL_SEND_MODE: '${EMAIL_SEND_MODE}'"
+        echo "NEWSLETTER_RECIPIENTS set: $(test -n "$NEWSLETTER_RECIPIENTS" && echo YES || echo NO)"
         echo "========================"
         python main.py
 

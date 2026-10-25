@@ -132,16 +132,16 @@ def main():
             )
             if gmail_res.get("success"):
                 if gmail_res.get("mode") == "sent":
-                    logger.info(f"Gmail newsletter sent successfully to {gmail_res.get('sent_count')}/{gmail_res.get('total_recipients')} recipients.")
+                    logger.info(f"✅ Gmail newsletter sent directly: {gmail_res.get('sent_count')}/{gmail_res.get('total_recipients')} recipients.")
                 else:
-                    logger.info(f"Gmail draft created successfully: {gmail_res.get('subject')}")
+                    logger.info(f"📝 Gmail draft created ({gmail_res.get('mode')}): {gmail_res.get('subject')}")
 
                 # 發送或建立草稿成功後，持久化計數器進位 (+1)
                 state_manager.increment_counters(next_nl_issue, next_st_issue)
             else:
-                logger.warning("Gmail newsletter step completed with errors (non-critical, continuing).")
+                logger.warning(f"⚠️ Gmail newsletter step finished with success=False: {gmail_res}")
         except Exception as e:
-            logger.warning(f"Gmail newsletter step skipped due to error: {e}")
+            logger.warning(f"❌ Gmail newsletter step skipped due to unexpected exception: {e}")
 
     # 6. Output result & Save History
     if success and news_success:
