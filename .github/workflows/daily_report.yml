@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      TZ: 'Asia/Taipei'
     permissions:
       contents: write
 
@@ -51,6 +53,7 @@ jobs:
         EMAIL_SEND_MODE: ${{ secrets.EMAIL_SEND_MODE }}
       run: |
         echo "=== Pre-flight check ==="
+        echo "Current system time: $(date)"
         echo "credentials.json exists: $(test -f credentials.json && echo YES || echo NO)"
         echo "token.json exists: $(test -f token.json && echo YES || echo NO)"
         echo "EMAIL_AUTO_SEND: '${EMAIL_AUTO_SEND}'"

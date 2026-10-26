@@ -2,11 +2,25 @@ import os
 import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import re
 from logger import get_logger
 
 logger = get_logger(__name__)
+
+def get_taiwan_date_str(fmt: str = "%Y/%m/%d") -> str:
+    """
+    取得台灣時區 (Asia/Taipei, UTC+8) 的當前日期字串。
+    確保在 GitHub Actions (預設 UTC) 或各類雲端環境中執行時，
+    信件內文之日期均精確對標台灣在地日期。
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Asia/Taipei")).strftime(fmt)
+    except Exception:
+        # 備援：台灣無夏令時間，全年恆為 UTC+8
+        tz_tw = timezone(timedelta(hours=8))
+        return datetime.now(tz_tw).strftime(fmt)
 
 # OAuth2 scopes: 支援自動直接發信 (gmail.send) 與建立草稿 (gmail.compose)
 SCOPES = [
@@ -82,7 +96,7 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
     組合【每日時務商報】極簡人文風 HTML 電子報內容 (無 Emoji、無 AI 產出感)。
     優先使用 templates/email_newsletter.html 模板。
     """
-    today_str = datetime.now().strftime("%Y/%m/%d")
+    today_str = get_taiwan_date_str("%Y/%m/%d")
     company_name = story_data.get("company_name", "")
     issue_num = issue_number or 47
     story_num = story_number or 63
@@ -250,7 +264,7 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
 
 def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, subject: str = None) -> str:
     """產生標準純文字版本 (Plain Text Fallback，簡約、無 Emoji)"""
-    today_str = datetime.now().strftime("%Y/%m/%d")
+    today_str = get_taiwan_date_str("%Y/%m/%d")
     company_name = story_data.get("company_name", "")
     issue_num = issue_number or 47
     story_num = story_number or 63

@@ -16,6 +16,7 @@ from modules.gmail_sender import (
     build_email_html,
     build_email_plaintext,
     send_newsletter,
+    get_taiwan_date_str,
     SCOPES
 )
 
@@ -140,6 +141,17 @@ class TestGmailNewsletter(unittest.TestCase):
             self.assertTrue(res["success"])
             self.assertEqual(res["subject"], "【每日時務商報#47】－每日快訊與成長")
             mock_create_draft.assert_called_once()
+
+    def test_taiwan_date_formatting(self):
+        """驗證信件內文日期對標台灣時區 (UTC+8)，格式為 YYYY/MM/DD"""
+        tw_date = get_taiwan_date_str("%Y/%m/%d")
+        self.assertRegex(tw_date, r'^\d{4}/\d{2}/\d{2}$')
+
+        html = build_email_html(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertIn(tw_date, html)
+
+        text = build_email_plaintext(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertIn(tw_date, text)
 
 if __name__ == "__main__":
     unittest.main()

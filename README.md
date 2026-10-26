@@ -58,6 +58,12 @@
 - `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **【每日時務商報】信件內文日期精確對標台灣時區 (Asia/Taipei UTC+8 Alignment)**:
+  * **內文與純文字日期時區對齊**：解決 GitHub Actions Linux Runner 預設運行於 UTC 國際標準時間（當排程在台灣時間清晨 04:13 觸發時，UTC 仍處於前一天深夜），導致信件頂部報頭與頁尾日期顯示為前一日的問題。
+  * **雙層時區防護機制**：
+    * **應用層精確轉換**：在 `modules/gmail_sender.py` 實作 `get_taiwan_date_str()`，使用 `zoneinfo.ZoneInfo("Asia/Taipei")`（具備常態 UTC+8 備援）精確產生台灣日期，全面應用於 HTML 模板替換 `{{ date }}` 與 Plaintext 備用格式。
+    * **CI/CD 環境層校準**：在 `.github/workflows/daily_report.yml` 注入 `TZ: 'Asia/Taipei'` 環境變數，確保 Runner 系統層級之 `date` 與排程執行日誌皆完全對齊台灣時間。
+  * **全量單元測試驗證**：在 `test_gmail_newsletter.py` 新增 `test_taiwan_date_formatting` 測試，確保日期格式正規性（`YYYY/MM/DD`）與模板置換準確性，7 項單元測試全數通過。
 * **【每日時務商報】發信通道診斷強化、RFC 5322 標準寄件者標頭與防垃圾信優化 (Delivery Diagnostics & Anti-Spam Optimization)**:
   * **RFC 5322 標準寄件者標頭**：修正過往 `From: me` 原始標頭容易被 Gmail 與各家收件伺服器誤判為格式異常或釣魚垃圾信的問題，改為自動取得授權帳號並格式化為標準 `From: 每日時務商報 <user@gmail.com>`，大幅提升主收件匣（Inbox）投遞率。
   * **環境變數強固化清洗**：針對 GitHub Secrets 輸入變數時可能夾帶之外層單雙引號（如 `"true"` 或 `'user@gmail.com'`），在 `modules/gmail_sender.py` 加入全面去除引號與前後空白處理，避免布林值判定失效。
