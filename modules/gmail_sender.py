@@ -22,6 +22,36 @@ def get_taiwan_date_str(fmt: str = "%Y/%m/%d") -> str:
         tz_tw = timezone(timedelta(hours=8))
         return datetime.now(tz_tw).strftime(fmt)
 
+def strip_emojis(text: str) -> str:
+    """全面清除文字中的 Emoji 表情符號與裝飾性特殊符號，確保信件風格極簡人文無干擾 (絕對保留中文字符)"""
+    if not text:
+        return ""
+    # 精確定義 Unicode 繪文字區間，絕對不干擾 CJK 繁簡中文字符 (\u4e00-\u9fff)
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # Emoticons
+        "\U0001F300-\U0001F5FF"  # Misc Symbols & Pictographs
+        "\U0001F680-\U0001F6FF"  # Transport & Map
+        "\U0001F700-\U0001F77F"  # Alchemical
+        "\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+        "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+        "\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+        "\U0001F1E6-\U0001F1FF"  # Flags
+        "\U00002700-\U000027BF"  # Dingbats
+        "\U00002600-\U000026FF"  # Misc symbols (e.g. ⚡, ☕, ✈)
+        "\U00002B50"             # Star ⭐
+        "]+",
+        flags=re.UNICODE
+    )
+    cleaned = emoji_pattern.sub('', text)
+    # 額外排除常見的手機/文字裝飾符號 (例如 💡, 📜, 🇩🇪, 🚀, 🪐, 📰, 📝, 🏷, 🔗, 👉, 🔹)
+    cleaned = re.sub(r'[👉🔹💡📜🇩🇪🚀🪐📰📝🏷🔗]', '', cleaned)
+    return cleaned
+
+SECTION_HEADER_PATTERN = re.compile(
+    r'^(?:(?:\d+[\.、\s]*)?|\s*[-–•·]\s*)?(核心競爭優勢|面臨挑戰|產品與服務|從中歸納|競爭優勢|產業分析|商業模式|未來展望|主要業務|主要挑戰|風險與挑戰|商業啟示|護城河與競爭優勢|分析|核心優勢|轉型策略|關鍵成功因素|市場機會|SWOT分析)(?:[：:]|\s*$)'
+)
+
 # OAuth2 scopes: 支援自動直接發信 (gmail.send) 與建立草稿 (gmail.compose)
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
@@ -133,6 +163,8 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
 
     # --- 商業故事主文處理 ---
     story_raw = story_data.get("story", "")
+    # 若 story_raw 意外帶有 Telegram 附加的商務單字或 Emoji 區塊，予以截斷
+    story_raw = re.split(r'💡|【今日商務單字】|今日商務單字', story_raw)[0].strip()
     story_lines = story_raw.split("\n")
     story_html_lines = []
     
@@ -150,6 +182,17 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
         first_non_empty = False
 
         is_hashtag = stripped.startswith("#")
+
+        # 檢測是否為大標題 (例如：核心競爭優勢、面臨挑戰、產品與服務、從中歸納、分析等)，並加上粗體
+        clean_header_check = re.sub(r'[\*\#\_`]', '', stripped).strip()
+        header_match = SECTION_HEADER_PATTERN.match(clean_header_check)
+        if header_match and not is_hashtag:
+            header_title = header_match.group(1)
+            story_html_lines.append(
+                f'<div class="story-header" style="font-weight:700;font-size:15.5px;color:#1a1a1a;margin:18px 0 6px 0;"><b>{header_title}</b></div>'
+            )
+            continue
+
         # 處理粗體與斜體 (復刻經典排版：重點藍色斜體)
         stripped = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', stripped)
         stripped = re.sub(r'\*(.*?)\*', r'<span style="color:rgb(37, 110, 225)"><i>\1</i></span>', stripped)
@@ -183,6 +226,12 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
     german_ex = german.get("example", "").replace("\n", "<br>")
 
     proverb_text = proverb.get("text", "")
+    # 確保諺語本文為純英文，若括號內夾帶中文翻譯則自動清除
+    if re.search(r'[\u4e00-\u9fff]', proverb_text):
+        cleaned_p = re.sub(r'[\(（][^\)）]*[\u4e00-\u9fff]+[^\)）]*[\)）]', '', proverb_text).strip()
+        if cleaned_p:
+            proverb_text = cleaned_p
+
     proverb_exp = proverb.get("explanation", "").replace("\n", "<br>")
     proverb_usage = proverb.get("usage", "").replace("\n", "<br>")
 
@@ -216,12 +265,12 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
             }
             for key, val in replacements.items():
                 template_str = template_str.replace(key, str(val))
-            return template_str
+            return strip_emojis(template_str)
         except Exception as e:
             logger.warning(f"讀取 HTML 模板失敗，切換內建版面: {e}")
 
     # 內建備用版面 (無 Emoji、極簡排版)
-    return f"""
+    return strip_emojis(f"""
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;line-height:1.7;color:#333;">
       <div style="text-align:center;border-bottom:2px solid #222;padding-bottom:12px;margin-bottom:20px;">
         <h1 style="font-size:22px;color:#222;margin:0;">【每日時務商報】</h1>
@@ -259,7 +308,7 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
         每日時務商報 · 第 {issue_num} 期 · {today_str}
       </div>
     </div>
-    """
+    """)
 
 
 def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, subject: str = None) -> str:
@@ -285,7 +334,19 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
         lines.append(f"   摘要: {item.get('summary', '')}\n")
 
     lines.append(f"\n商業故事#{story_num}：{company_name}\n")
-    lines.append(story_data.get("story", "").strip())
+    
+    story_raw = story_data.get("story", "")
+    story_raw = re.split(r'💡|【今日商務單字】|今日商務單字', story_raw)[0].strip()
+    story_lines_pt = []
+    for line in story_raw.split("\n"):
+        st = line.strip()
+        clean_st = re.sub(r'[\*\#\_`]', '', st).strip()
+        header_match = SECTION_HEADER_PATTERN.match(clean_st)
+        if header_match:
+            story_lines_pt.append(f"\n【{header_match.group(1)}】")
+        else:
+            story_lines_pt.append(line)
+    lines.append("\n".join(story_lines_pt).strip())
 
     vocab = story_data.get("vocab", {})
     lines.append(f"\n\n【今日商務單字】")
@@ -294,8 +355,14 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
     lines.append(f"例句：{vocab.get('example', '')}")
 
     proverb = story_data.get("proverb", {})
+    proverb_text = proverb.get("text", "")
+    if re.search(r'[\u4e00-\u9fff]', proverb_text):
+        cleaned_p = re.sub(r'[\(（][^\)）]*[\u4e00-\u9fff]+[^\)）]*[\)）]', '', proverb_text).strip()
+        if cleaned_p:
+            proverb_text = cleaned_p
+
     lines.append(f"\n【今日商業／處世諺語】")
-    lines.append(f"{proverb.get('text', '')}")
+    lines.append(f"{proverb_text}")
     lines.append(f"解析：{proverb.get('explanation', '')}")
     lines.append(f"應用：{proverb.get('usage', '')}")
 
@@ -308,7 +375,7 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
     lines.append(f"\n----------------------------------------")
     lines.append(f"每日時務商報 · 第 {issue_num} 期 · {today_str}")
 
-    return "\n".join(lines)
+    return strip_emojis("\n".join(lines))
 
 
 _cached_sender_email = None

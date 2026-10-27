@@ -58,6 +58,20 @@
 - `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **【每日時務商報】信件零 Emoji 隔離防護、商業俗諺純英文規範與段落大標粗體強化 (Zero-Emoji Quarantine, English-Only Proverbs & Bold Section Headers)**:
+  * **信件徹底零 Emoji 防護與 Telegram 區塊隔離**：
+    * 徹底修復 `main.py` 中傳遞給電子報的 `story_data_for_gmail["story"]` 誤帶入已附加 Telegram 裝飾 Emoji（💡, 🔹, 👉, 🇩🇪, 📜）之 `post_draft` 的問題，改為精確提取純商業故事內文 `pure_story`。
+    * 在 `modules/gmail_sender.py` 實作精確 Unicode 繪文字過濾器 `strip_emojis()` 與截斷防護，確保電子報 HTML 與降級純文字版本在任何情況下皆徹底零 Emoji，徹底杜絕 AI 裝飾感。
+    * 同步清理 `modules/formatter.py` 內建生成之 `latest_newsletter.html`，移除歷史殘留之裝飾符號。
+  * **商業俗諺與處世諺語純英文規範與中文退件防護**：
+    * 升級 `modules/llm_api.py` 之 `ProverbSchema`、Prompt 指令與 `regenerate_field_with_llm()`，嚴格限定諺語本文 (`text`) 必須為英文箴言/格言（例如 "Smooth seas do not make skillful sailors."），嚴禁輸出中文諺語；由來解析與商業應用則維持專業繁體中文。
+    * 在 `modules/formatter.py` 諺語重試迴圈中加入中文字元偵測防線，若 LLM 產出含有中文字元即判定為違規退件重生；同時在 `modules/gmail_sender.py` 加入括號中文翻譯自動剝離清洗邏輯，達成雙層純英文保證。
+  * **段落大標粗體強化（核心競爭優勢、面臨挑戰等）**：
+    * 全面升級 `統整格式模板.md` 與 Prompt 排版規範，明確要求模型在輸出「產品與服務」、「核心競爭優勢」、「面臨挑戰」、「從中歸納」或分析大標時，必須使用 Markdown 粗體語法 `**`。
+    * 在 `modules/gmail_sender.py` 導入 `SECTION_HEADER_PATTERN` 正則比對引擎，即便 LLM 輸出遺漏 `**`，系統亦會自動識別並包裹為 `<div class="story-header"><b>...</b></div>` 粗體樣式。
+    * 於 `templates/email_newsletter.html` 增加 `.story-header` 專屬樣式，確保大標醒目大方且結構分明。
+  * **全量單元測試驗證通過**：
+    * 在 `test_gmail_newsletter.py` 擴充 `test_section_headers_bolded`、`test_emoji_leakage_and_telegram_block_truncation`、`test_proverb_english_only_purging_chinese` 等測試，共 10 項單元測試全數綠燈通過。
 * **【每日時務商報】信件內文日期精確對標台灣時區 (Asia/Taipei UTC+8 Alignment)**:
   * **內文與純文字日期時區對齊**：解決 GitHub Actions Linux Runner 預設運行於 UTC 國際標準時間（當排程在台灣時間清晨 04:13 觸發時，UTC 仍處於前一天深夜），導致信件頂部報頭與頁尾日期顯示為前一日的問題。
   * **雙層時區防護機制**：

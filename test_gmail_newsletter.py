@@ -153,5 +153,76 @@ class TestGmailNewsletter(unittest.TestCase):
         text = build_email_plaintext(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
         self.assertIn(tw_date, text)
 
+    def test_section_headers_bolded(self):
+        """驗證商業故事大標（核心競爭優勢、面臨挑戰、產品與服務、從中歸納）自動加上粗體"""
+        story_data = dict(self.sample_story_data)
+        story_data["story"] = (
+            "普誠科技成立於1986年。\n"
+            "產品與服務\n"
+            "- 車用IC：車載HUD驅動\n"
+            "核心競爭優勢\n"
+            "- 高門檻車規前裝供應鏈認證\n"
+            "面臨挑戰\n"
+            "- 車載供應鏈面臨庫存調整週期\n"
+            "從中歸納\n"
+            "- 跨入高門檻利基市場能打造技術壁壘\n"
+            "#普誠科技 #車用晶片"
+        )
+        html = build_email_html(story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertIn("<b>核心競爭優勢</b>", html)
+        self.assertIn("<b>面臨挑戰</b>", html)
+        self.assertIn("<b>產品與服務</b>", html)
+        self.assertIn("<b>從中歸納</b>", html)
+
+        text = build_email_plaintext(story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertIn("【核心競爭優勢】", text)
+        self.assertIn("【面臨挑戰】", text)
+
+    def test_emoji_leakage_and_telegram_block_truncation(self):
+        """驗證若傳入包含 Telegram 附加區塊與 Emoji 的文章，信件會自動截斷且徹底移除所有 Emoji"""
+        story_data = dict(self.sample_story_data)
+        story_data["story"] = (
+            "華擎科技致力於軟硬整合。\n"
+            "核心競爭優勢\n"
+            "- 差異化利基定位\n"
+            "面臨挑戰\n"
+            "- 全球總經波動\n"
+            "#華擎科技 #伺服器\n\n"
+            "💡 **【今日商務單字】**\n"
+            "🔹 **capitalize** (v.) //ˈkæp.ə.t̬əl.aɪz//\n"
+            "👉 釋義：利用、趁機獲利\n"
+            "🇩🇪 **【德語小教室】**\n"
+            "🔹 **die Wertschöpfungskette**\n"
+            "📜 **【今日商業/處世諺語】**\n"
+            "🔹 **Strike while the iron is hot.**"
+        )
+        html = build_email_html(story_data, self.sample_news_data, issue_number=47, story_number=63)
+        # 驗證 Emoji 徹底被移除
+        for emoji in ["💡", "📜", "🇩🇪", "🚀", "🪐", "👉", "🔹", "📰", "📝", "🏷", "🔗"]:
+            self.assertNotIn(emoji, html)
+        # 驗證 Telegram 附加區塊被成功截斷，避免在 {{ story_html }} 內重複出現
+        self.assertNotIn("💡", html)
+        self.assertNotIn("👉 釋義", html)
+
+        text = build_email_plaintext(story_data, self.sample_news_data, issue_number=47, story_number=63)
+        for emoji in ["💡", "📜", "🇩🇪", "🚀", "🪐", "👉", "🔹", "📰", "📝", "🏷", "🔗"]:
+            self.assertNotIn(emoji, text)
+
+    def test_proverb_english_only_purging_chinese(self):
+        """驗證商業俗諺與諺語僅保留純英文，若帶有中文括號翻譯會自動清洗去除"""
+        story_data = dict(self.sample_story_data)
+        story_data["proverb"] = {
+            "text": "Smooth seas do not make skillful sailors. (平靜的大海造就不出熟練的水手)",
+            "explanation": "唯有歷經風浪才能鍛鍊實力。",
+            "usage": "在逆境中調校方向。"
+        }
+        html = build_email_html(story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertIn("Smooth seas do not make skillful sailors.", html)
+        self.assertNotIn("平靜的大海造就不出熟練的水手", html)
+
+        text = build_email_plaintext(story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertIn("Smooth seas do not make skillful sailors.", text)
+        self.assertNotIn("平靜的大海造就不出熟練的水手", text)
+
 if __name__ == "__main__":
     unittest.main()

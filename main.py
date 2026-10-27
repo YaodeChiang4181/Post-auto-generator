@@ -116,10 +116,17 @@ def main():
             next_nl_issue, next_st_issue = state_manager.get_next_counters()
             logger.info(f"Preparing newsletter issue #{next_nl_issue}, story #{next_st_issue}")
 
-            # 組合 story_data 傳入 gmail_sender
+            # 組合 story_data 傳入 gmail_sender (僅傳遞純故事內文，避免混入 Telegram 附加的單字與 Emoji 區塊)
+            pure_story = ""
+            if json_data and json_data.get("story"):
+                pure_story = json_data["story"]
+            elif post_draft:
+                import re
+                pure_story = re.split(r'💡|【今日商務單字】|今日商務單字', post_draft)[0].strip()
+
             story_data_for_gmail = {
                 "company_name": company['name'],
-                "story": post_draft,
+                "story": pure_story,
                 "vocab": json_data.get("vocabulary", {}) if json_data else {},
                 "proverb": json_data.get("proverb", {}) if json_data else {},
                 "german": json_data.get("german_vocab", {}) if json_data else {},

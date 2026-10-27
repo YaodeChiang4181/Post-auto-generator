@@ -45,12 +45,15 @@ def format_daily_report(company_data, metrics, state_manager):
             else:
                 break
 
-        # 2. 檢驗並重試商業諺語 (Proverb)
+        # 2. 檢驗並重試商業諺語 (Proverb: 必須為英文，若重複或含有中文則重新生成)
         proverb_rejected = []
         for attempt in range(max_retries):
             current_proverb = proverb.get('text', '') if proverb else ''
-            if current_proverb and state_manager.check_vocabulary_exists(current_proverb, 'proverb'):
-                logger.info(f"Proverb '{current_proverb}' is a duplicate (attempt {attempt+1}/{max_retries}). Regenerating...")
+            is_dup = bool(current_proverb and state_manager.check_vocabulary_exists(current_proverb, 'proverb'))
+            has_chinese = bool(re.search(r'[\u4e00-\u9fff]', current_proverb))
+            if current_proverb and (is_dup or has_chinese):
+                reason = "duplicate" if is_dup else "contains Chinese (must be English)"
+                logger.info(f"Proverb '{current_proverb}' {reason} (attempt {attempt+1}/{max_retries}). Regenerating...")
                 proverb_rejected.append(current_proverb)
                 new_proverb = regenerate_field_with_llm('proverb', proverb_rejected, story)
                 if new_proverb and new_proverb.get('text'):
@@ -96,7 +99,7 @@ def format_daily_report(company_data, metrics, state_manager):
         markdown_content += f"👉 解析：{proverb.get('explanation', '')}\n"
         markdown_content += f"👉 應用：{proverb.get('usage', '')}"
         
-        # 2. 產生電子報版的 HTML 內容並存檔
+        # 2. 產生電子報版的 HTML 內容並存檔 (無 Emoji)
         # 處理 Markdown 粗體與斜體
         story_html = story
         story_html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', story_html)
@@ -122,24 +125,24 @@ def format_daily_report(company_data, metrics, state_manager):
             </div>
             
             <div class="vocab-box">
-                <h2>💡 今日商務單字</h2>
+                <h2>【今日商務單字】</h2>
                 <p><span class="word">{vocab.get('word', '')}</span> <span class="pronunciation">({vocab.get('pos', '')}) /{vocab.get('pronunciation', '')}/</span></p>
-                <p>👉 <strong>釋義：</strong><br>{vocab.get('definition', '').replace(chr(10), '<br>')}</p>
-                <p>👉 <strong>例句：</strong><br>{vocab.get('example', '').replace(chr(10), '<br>')}</p>
+                <p><strong>釋義：</strong><br>{vocab.get('definition', '').replace(chr(10), '<br>')}</p>
+                <p><strong>例句：</strong><br>{vocab.get('example', '').replace(chr(10), '<br>')}</p>
             </div>
             
             <div class="vocab-box">
-                <h2>🇩🇪 德語小教室</h2>
+                <h2>【德語小教室】</h2>
                 <p><span class="word">{german.get('word', '')}</span> <span class="pronunciation">({german.get('pos', '')}) /{german.get('pronunciation', '')}/</span></p>
-                <p>👉 <strong>釋義：</strong><br>{german.get('definition', '').replace(chr(10), '<br>')}</p>
-                <p>👉 <strong>例句：</strong><br>{german.get('example', '').replace(chr(10), '<br>')}</p>
+                <p><strong>釋義：</strong><br>{german.get('definition', '').replace(chr(10), '<br>')}</p>
+                <p><strong>例句：</strong><br>{german.get('example', '').replace(chr(10), '<br>')}</p>
             </div>
             
             <div class="proverb-box">
-                <h2>📜 今日商業/處世諺語</h2>
+                <h2>【今日商業/處世諺語】</h2>
                 <p><span class="word">{proverb.get('text', '')}</span></p>
-                <p>👉 <strong>解析：</strong><br>{proverb.get('explanation', '').replace(chr(10), '<br>')}</p>
-                <p>👉 <strong>應用：</strong><br>{proverb.get('usage', '').replace(chr(10), '<br>')}</p>
+                <p><strong>解析：</strong><br>{proverb.get('explanation', '').replace(chr(10), '<br>')}</p>
+                <p><strong>應用：</strong><br>{proverb.get('usage', '').replace(chr(10), '<br>')}</p>
             </div>
         </body>
         </html>

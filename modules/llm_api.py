@@ -19,9 +19,9 @@ class VocabularySchema(BaseModel):
     example: str = Field(description="例句 (附中文翻譯)")
 
 class ProverbSchema(BaseModel):
-    text: str = Field(description="諺語 (英文或中文)")
-    explanation: str = Field(description="解釋與由來")
-    usage: str = Field(description="應用場景或如何與今日故事連結")
+    text: str = Field(description="諺語 (必須為英文諺語/箴言/格言，嚴禁使用中文諺語，例如：'Smooth seas do not make skillful sailors.')")
+    explanation: str = Field(description="解釋與由來 (以繁體中文說明)")
+    usage: str = Field(description="應用場景或如何與今日故事連結 (以繁體中文說明)")
 
 class GermanVocabSchema(BaseModel):
     word: str = Field(description="德文單字")
@@ -37,13 +37,14 @@ class DailyReportSchema(BaseModel):
     german_vocab: GermanVocabSchema = Field(description="今日德語小教室單字")
 
 def get_system_prompt():
-    base_prompt = """你是一位專業的資訊整理助理。請將以下定時抓取的原始資訊，整理成結構清楚、適合手機閱讀的繁體中文linkedin風格的文章。同時，你需要從這篇商業故事中提煉出一個核心的「商業英語單字」、一句契合故事主軸的「商業/處世諺語」，以及一個相關的「德文單字」（作為德語小教室素材）。
+    base_prompt = """你是一位專業的資訊整理助理。請將以下定時抓取的原始資訊，整理成結構清楚、適合手機閱讀的繁體中文linkedin風格的文章。同時，你需要從這篇商業故事中提煉出一個核心的「商業英語單字」、一句契合故事主軸的「商業/處世英文諺語」（注意：諺語本文 text 必須是英文格言/箴言，嚴禁中文諺語；其解釋與應用則以繁體中文說明），以及一個相關的「德文單字」（作為德語小教室素材）。
 
-排版原則 (僅針對 story 欄位)：
-1. 給出清晰的核心標題
-2. 每個點條列式整理 2~4 個重點摘要
-3. 去除重複、雜訊或無意義字元
-4. 結尾附上幾個hashtag"""
+排版原則 (針對 story 欄位)：
+1. 給出清晰的核心標題 (例如【...】)
+2. 每個主要段落大標（如「產品與服務」、「核心競爭優勢」、「面臨挑戰」、「從中歸納」或其它分析大標）必須使用粗體語法加粗標記（例如 `**核心競爭優勢**`、`**面臨挑戰**`）。
+3. 每個點條列式整理 2~4 個重點摘要 (建議以 `- ` 或 `· ` 開頭)
+4. 去除重複、雜訊或無意義字元
+5. 結尾附上幾個hashtag"""
 
     template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '統整格式模板.md')
     if os.path.exists(template_path):
@@ -193,7 +194,7 @@ def regenerate_field_with_llm(field_type, rejected_words, story):
             user_content += "請重新從故事中挑選另一個「商業英語單字」，必須與上述所有被拒絕的單字完全不同，且為全新詞彙。"
             schema = VocabularySchema
         elif field_type == 'proverb':
-            user_content += "請重新挑選另一個契合故事主軸的「商業/處世諺語」，必須與上述所有被拒絕的諺語完全不同。"
+            user_content += "請重新挑選另一個契合故事主軸的「商業/處世英文諺語」（注意：諺語本文 text 必須是英文箴言/格言，嚴禁中文諺語；解釋與應用則以繁體中文說明），必須與上述所有被拒絕的諺語完全不同。"
             schema = ProverbSchema
         elif field_type == 'german':
             user_content += "請重新挑選另一個相關的「德文單字」，必須與上述所有被拒絕的單字完全不同。"
