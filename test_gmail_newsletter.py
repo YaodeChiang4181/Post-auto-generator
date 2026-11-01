@@ -82,6 +82,9 @@ class TestGmailNewsletter(unittest.TestCase):
         self.assertIn("輝達新一代 AI 晶片架構震撼發表", html)
         self.assertIn("die Halbleiterindustrie", html)
         self.assertIn("paradigm", html)
+        # 驗證每日重大新聞快訊 Top 3 具備 GitHub Pages 網頁版超連結
+        self.assertIn('href="https://yaodechiang4181.github.io/Post-auto-generator/"', html)
+        self.assertIn("每日重大新聞快訊 Top 3", html)
         # 驗證無 Emoji 出現
         for emoji in ["💡", "📜", "🇩🇪", "🚀", "🪐", "👉"]:
             self.assertNotIn(emoji, html)
@@ -94,6 +97,7 @@ class TestGmailNewsletter(unittest.TestCase):
         self.assertIn("1. 輝達新一代 AI 晶片架構震撼發表", text)
         self.assertIn("【今日商務單字】", text)
         self.assertIn("die Halbleiterindustrie", text)
+        self.assertIn("https://yaodechiang4181.github.io/Post-auto-generator/", text)
         for emoji in ["💡", "📜", "🇩🇪", "🚀", "🪐", "👉"]:
             self.assertNotIn(emoji, text)
 

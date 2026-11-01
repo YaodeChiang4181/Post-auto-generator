@@ -17,7 +17,7 @@ def run():
     top_news_data = select_top_news_with_llm(news_candidates, recent_titles=recent_titles)
     
     if top_news_data and "top_news" in top_news_data:
-        news_msg = "📰 【每日重大新聞快訊 Top 3】\n\n"
+        news_msg = "📰 【每日重大新聞快訊 Top 3】\n🌐 網頁版互動儀表板：https://yaodechiang4181.github.io/Post-auto-generator/\n\n"
         top_news_data["top_news"].sort(key=lambda x: x.get('rank', 99))
         
         for item in top_news_data["top_news"]:

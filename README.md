@@ -58,6 +58,13 @@
 - `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **【自動化與版面升級】Auto Git Push 專屬 Skill 建立與重大新聞快訊 Top 3 網頁版超連結整合 (Auto Git Push Skill & News Dashboard Hyperlink)**:
+  * **Auto Git Push 專屬 Skill 建立**：
+    * 於 `.agents/skills/auto-git-push/SKILL.md` 建立標準化自動化 Skill，定義了變更驗證測試、`README.md` 更新、Conventional Commit 規範與自動 `git push` 的完整 SOP。
+  * **重大新聞快訊 Top 3 網頁版超連結整合**：
+    * **電子報模板與備援版面**：升級 `templates/email_newsletter.html` 與 `modules/gmail_sender.py`，將「每日重大新聞快訊 Top 3」大標題包裹超連結直通 `https://yaodechiang4181.github.io/Post-auto-generator/`，並加入專屬 CSS 樣式確保郵件客戶端中排版美觀一致。
+    * **純文字備用格式與 Telegram 推播**：在 `modules/gmail_sender.py` 的 Plaintext 降級版本中標註網頁版連結；同步升級 `main.py` 與 `run_news.py`，於 Telegram 推播的 Top 3 新聞標題下方自動附上互動儀表板跳轉網址。
+    * **單元測試強化**：於 `test_gmail_newsletter.py` 新增對 HTML 與純文字版本中 GitHub Pages 網址存在的斷言驗證，所有單元測試全數綠燈通過。
 * **【每日時務商報】信件零 Emoji 隔離防護、商業俗諺純英文規範與段落大標粗體強化 (Zero-Emoji Quarantine, English-Only Proverbs & Bold Section Headers)**:
   * **信件徹底零 Emoji 防護與 Telegram 區塊隔離**：
     * 徹底修復 `main.py` 中傳遞給電子報的 `story_data_for_gmail["story"]` 誤帶入已附加 Telegram 裝飾 Emoji（💡, 🔹, 👉, 🇩🇪, 📜）之 `post_draft` 的問題，改為精確提取純商業故事內文 `pure_story`。

@@ -53,7 +53,7 @@ def main():
     news_success = True
     processed_news_data = {"top_news": []}  # 用於 Gmail 草稿
     if top_news_data and "top_news" in top_news_data:
-        news_msg = "📰 【每日重大新聞快訊 Top 3】\n\n"
+        news_msg = "📰 【每日重大新聞快訊 Top 3】\n🌐 網頁版互動儀表板：https://yaodechiang4181.github.io/Post-auto-generator/\n\n"
         processed_news_data = top_news_data  # 保留完整結構供 Gmail 使用
         
         # Sort by rank just in case LLM shuffles them

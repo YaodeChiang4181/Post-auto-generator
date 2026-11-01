@@ -276,7 +276,7 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
         <h1 style="font-size:22px;color:#222;margin:0;">【每日時務商報】</h1>
         <div style="font-size:12px;color:#666;">第 {issue_num} 期 · {today_str} · 每日快訊與成長</div>
       </div>
-      <h2 style="color:#a36200;font-size:18px;">每日重大新聞快訊 Top 3</h2>
+      <h2 style="color:#a36200;font-size:18px;"><a href="https://yaodechiang4181.github.io/Post-auto-generator/" target="_blank" style="color:#a36200;text-decoration:none;">每日重大新聞快訊 Top 3</a></h2>
       {news_items_html}
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
       <div style="text-align:center;margin-bottom:16px;">
@@ -324,7 +324,7 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
         f" {actual_subject}",
         f" 第 {issue_num} 期 · 日期：{today_str}",
         f"========================================\n",
-        f"每日重大新聞快訊 Top 3\n"
+        f"每日重大新聞快訊 Top 3 ( 網頁版: https://yaodechiang4181.github.io/Post-auto-generator/ )\n"
     ]
 
     for idx, item in enumerate(news_data.get("top_news", []), 1):
