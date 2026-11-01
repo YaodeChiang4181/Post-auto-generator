@@ -206,7 +206,27 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
             story_html_lines.append(
                 f'<div style="margin:4px 0;">{stripped}</div>'
             )
-    story_html = "\n".join(story_html_lines)
+
+    # 檢查過濾後的 story_html 是否含有實質文字內容 (移除 HTML 標籤後計算長度)
+    clean_rendered_text = re.sub(r'<[^>]+>', '', "".join(story_html_lines)).strip()
+    if len(clean_rendered_text) < 30:
+        logger.warning(f"檢測到 story_html 經過濾後實質內容過短或為空 ({len(clean_rendered_text)} 字)，啟動備援保護...")
+        if story_raw and len(story_raw) > 50:
+            fallback_lines = []
+            for line in story_raw.split("\n"):
+                s = line.strip()
+                if s:
+                    fallback_lines.append(f'<div style="margin:4px 0;">{s}</div>')
+            story_html = "\n".join(fallback_lines)
+        else:
+            story_html = (
+                f'<div style="margin:12px 0;line-height:1.8;color:#555;">'
+                f'{company_name} 深耕其專業領域與技術創新。本期商業故事聚焦其核心營運優勢與產業脈絡，'
+                f'相關經營成長重點與更多資訊請參考下方商務英語解析與處世哲學。'
+                f'</div>'
+            )
+    else:
+        story_html = "\n".join(story_html_lines)
 
     # --- 單字、德語、諺語資料 ---
     vocab = story_data.get("vocab", {})
@@ -346,7 +366,16 @@ def build_email_plaintext(story_data: dict, news_data: dict, issue_number: int =
             story_lines_pt.append(f"\n【{header_match.group(1)}】")
         else:
             story_lines_pt.append(line)
-    lines.append("\n".join(story_lines_pt).strip())
+            
+    clean_rendered_pt = "".join(story_lines_pt).strip()
+    if len(clean_rendered_pt) < 30:
+        if story_raw and len(story_raw) > 50:
+            story_pt = story_raw
+        else:
+            story_pt = f"{company_name} 深耕其專業領域與技術創新，經營成長重點請參考下方商務解析。"
+    else:
+        story_pt = "\n".join(story_lines_pt).strip()
+    lines.append(story_pt)
 
     vocab = story_data.get("vocab", {})
     lines.append(f"\n\n【今日商務單字】")

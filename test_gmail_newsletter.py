@@ -19,6 +19,7 @@ from modules.gmail_sender import (
     get_taiwan_date_str,
     SCOPES
 )
+from modules.formatter import is_valid_business_story
 
 class TestGmailNewsletter(unittest.TestCase):
 
@@ -227,6 +228,68 @@ class TestGmailNewsletter(unittest.TestCase):
         text = build_email_plaintext(story_data, self.sample_news_data, issue_number=47, story_number=63)
         self.assertIn("Smooth seas do not make skillful sailors.", text)
         self.assertNotIn("平靜的大海造就不出熟練的水手", text)
+
+    def test_story_quality_validation(self):
+        """驗證 Tier 2: is_valid_business_story 商業故事品質防線"""
+        # 1. 空白或 None
+        valid, _ = is_valid_business_story("")
+        self.assertFalse(valid)
+        valid, _ = is_valid_business_story(None)
+        self.assertFalse(valid)
+
+        # 2. 僅有名稱或標題（重現竹陞科技案例）
+        valid, reason = is_valid_business_story("商業故事#69：竹陞科技股份有限公司")
+        self.assertFalse(valid)
+        self.assertIn("字數過短", reason)
+
+        # 3. 字數過短
+        short_text = "這是一家很好的半導體公司，主要做產品與服務，但也面臨挑戰。"
+        valid, reason = is_valid_business_story(short_text)
+        self.assertFalse(valid)
+        self.assertIn("字數過短", reason)
+
+        # 4. 字數足夠但缺乏核心段落
+        filler_text = "公司介紹。" * 60
+        valid, reason = is_valid_business_story(filler_text)
+        self.assertFalse(valid)
+        self.assertIn("缺少必要分析段落", reason)
+
+        # 5. 完整商業故事（應驗證通過）
+        complete_story = (
+            "【從消費電子邁向車規晶片：在逆風中淬鍊轉型的韌性】\n\n"
+            "普誠科技成立於1986年，深耕台灣消費性IC設計領域。\n\n"
+            "**產品與服務**\n"
+            "- 車用IC：車載抬頭顯示器驅動IC、車用LED照明驅動IC\n"
+            "- 工業與特殊消費性IC：工業與民生用噴墨打印機驅動IC\n\n"
+            "**核心競爭優勢**\n"
+            "- 高門檻車規前裝供應鏈認證，建立高轉換成本護城河\n"
+            "- 具備驅動IC與微控制器高度整合開發能力\n\n"
+            "**面臨挑戰**\n"
+            "- 車載供應鏈面臨客戶庫存調整週期，短期拉貨動能受壓\n\n"
+            "**從中歸納**\n"
+            "- 跨入高門檻利基市場能打造深厚技術壁壘\n\n"
+            "#普誠科技 #IC設計"
+        )
+        valid, reason = is_valid_business_story(complete_story)
+        self.assertTrue(valid)
+        self.assertEqual(reason, "驗證通過")
+
+    def test_story_title_only_fallback_protection(self):
+        """驗證 Tier 3: 當傳入僅有標題的 story 時，郵件與純文字皆觸發備援保護，絕不留白"""
+        story_data = dict(self.sample_story_data)
+        # 模擬竹陞科技：故事主文僅有一行標題
+        story_data["story"] = "商業故事#69：竹陞科技股份有限公司"
+        story_data["company_name"] = "竹陞科技股份有限公司"
+
+        html = build_email_html(story_data, self.sample_news_data, issue_number=53, story_number=69)
+        # 驗證 HTML 中含有備援內容或公司資訊，而非空白
+        self.assertIn("竹陞科技股份有限公司", html)
+        self.assertIn("商業故事#69", html)
+        self.assertIn("深耕其專業領域與技術創新", html)
+
+        text = build_email_plaintext(story_data, self.sample_news_data, issue_number=53, story_number=69)
+        self.assertIn("竹陞科技股份有限公司", text)
+        self.assertIn("深耕其專業領域與技術創新", text)
 
 if __name__ == "__main__":
     unittest.main()

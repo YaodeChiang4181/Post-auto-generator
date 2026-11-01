@@ -1,11 +1,31 @@
 import os
 import json
 import re
-from modules.llm_api import summarize_with_llm, regenerate_field_with_llm
+from modules.llm_api import summarize_with_llm, regenerate_field_with_llm, regenerate_story_with_llm
 from config import DATA_DIR
 from logger import get_logger
 
 logger = get_logger(__name__)
+
+def is_valid_business_story(story_text: str) -> tuple[bool, str]:
+    """
+    檢驗商業故事內文品質與完整性。
+    回傳 (is_valid, reason)
+    """
+    if not story_text or not story_text.strip():
+        return False, "故事主文為空"
+    
+    clean_story = re.split(r'💡|【今日商務單字】|今日商務單字', story_text)[0].strip()
+    
+    if len(clean_story) < 180:
+        return False, f"故事主文字數過短 ({len(clean_story)} 字 < 180 字門檻)"
+        
+    core_sections = ["產品與服務", "核心競爭優勢", "面臨挑戰", "從中歸納", "競爭優勢", "挑戰", "發展方向"]
+    matches = sum(1 for sec in core_sections if sec in clean_story)
+    if matches < 2:
+        return False, f"故事主文缺少必要分析段落 (僅匹配到 {matches} 個核心關鍵詞)"
+        
+    return True, "驗證通過"
 
 def format_daily_report(company_data, metrics, state_manager):
     """
@@ -21,6 +41,29 @@ def format_daily_report(company_data, metrics, state_manager):
         
     try:
         story = json_data.get("story", "")
+
+        # --- 防護層 2：商業故事完整性檢查與受控重試 (Story Quality Gate) ---
+        is_valid, reason = is_valid_business_story(story)
+        if not is_valid:
+            logger.warning(f"商業故事初次生成未達標準: {reason}。啟動單獨重新生成重試機制...")
+            max_story_retries = 2
+            for s_attempt in range(max_story_retries):
+                correction_prompt = f"前次生成的商業故事不合格（{reason}）。請務必輸出包含產品與服務、核心競爭優勢、面臨挑戰與從中歸納的 400~800 字深度分析！"
+                new_story = regenerate_story_with_llm(company_data, metrics, correction_prompt)
+                if new_story:
+                    valid_retry, reason_retry = is_valid_business_story(new_story)
+                    if valid_retry:
+                        logger.info(f"商業故事重新生成成功 (attempt {s_attempt+1}/{max_story_retries})！")
+                        story = new_story
+                        json_data["story"] = new_story
+                        break
+                    else:
+                        logger.warning(f"商業故事重試仍不合格 (attempt {s_attempt+1}/{max_story_retries}): {reason_retry}")
+                        reason = reason_retry
+                        if len(new_story.strip()) > len(story.strip()):
+                            story = new_story
+                            json_data["story"] = new_story
+
         vocab = json_data.get("vocabulary", {})
         proverb = json_data.get("proverb", {})
         german = json_data.get("german_vocab", {})

@@ -58,6 +58,18 @@
 - `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **【商業故事品質與防空白三層防護體系】Schema嚴格約束、故事驗收重試迴圈與郵件備援防呆 (Three-Tier Defense Against Empty Business Story)**:
+  * **第一層：Schema 結構約束與 System Prompt 強化 (Tier 1: Schema & Prompt Hardening)**：
+    * 升級 `modules/llm_api.py` 中的 `DailyReportSchema`，將 `story` 欄位明確定義為「完整的商業故事分析主文，必須包含核心標題、公司沿革、產品與服務、核心競爭優勢、面臨挑戰、從中歸納及結尾 hashtags，字數 400~800 字，嚴禁僅輸出公司名稱或空白」。
+    * 於 `get_system_prompt()` 加入第 6 條排版核心規範，禁止輸出短句或純標題，強制要求深度分析段落。
+  * **第二層：故事驗收防線與單獨修復重試迴圈 (Tier 2: Story Quality Gate & Targeted Retry)**：
+    * 於 `modules/formatter.py` 實作 `is_valid_business_story()` 驗收函式，嚴格檢驗故事主文有效長度（>= 180 字）及是否至少包含 2 個以上核心分析段落（產品與服務、核心競爭優勢、面臨挑戰、從中歸納等）。
+    * 在 `format_daily_report()` 引入受控重試機制（至多 2 次），若初次產出未達標準，系統立即呼叫 `regenerate_story_with_llm()`，針對前次不足處注入補正指令單獨重新生成完整故事。
+  * **第三層：郵件與純文字過濾防呆與安全備援 (Tier 3: Safe Filtering & Fallback Guard)**：
+    * 升級 `modules/gmail_sender.py` 中的 `build_email_html()` 與 `build_email_plaintext()`，在移除標籤過濾後檢測實質文字長度。
+    * 若遇任何極端狀況導致過濾後字數不足（< 30 字），自動觸發備援機制（Fallback Guard），保留原始非空段落或帶入公司營運摘要備援，徹底杜絕信件與推播中出現標題下方空白的排版事故。
+  * **全量單元測試驗證通過**：
+    * 於 `test_gmail_newsletter.py` 新增 `test_story_quality_validation` 與 `test_story_title_only_fallback_protection`，專案 17 項單元測試全數綠燈通過。
 * **【自動化與版面升級】Auto Git Push 專屬 Skill 建立與重大新聞快訊 Top 3 網頁版超連結整合 (Auto Git Push Skill & News Dashboard Hyperlink)**:
   * **Auto Git Push 專屬 Skill 建立**：
     * 於 `.agents/skills/auto-git-push/SKILL.md` 建立標準化自動化 Skill，定義了變更驗證測試、`README.md` 更新、Conventional Commit 規範與自動 `git push` 的完整 SOP。

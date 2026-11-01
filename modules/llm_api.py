@@ -31,7 +31,13 @@ class GermanVocabSchema(BaseModel):
     example: str = Field(description="例句 (附繁體中文翻譯)")
 
 class DailyReportSchema(BaseModel):
-    story: str = Field(description="你的商業故事主文 (包含標題、條列重點、hashtag)")
+    story: str = Field(
+        description=(
+            "完整的商業故事分析主文。必須包含：核心標題、公司沿革背景、"
+            "**產品與服務**、**核心競爭優勢**、**面臨挑戰**、**從中歸納**及結尾 hashtags。"
+            "內文字數必須充實（400~800 字），嚴禁僅輸出公司名稱或空白！"
+        )
+    )
     vocabulary: VocabularySchema = Field(description="今日商務單字")
     proverb: ProverbSchema = Field(description="今日商業/處世諺語")
     german_vocab: GermanVocabSchema = Field(description="今日德語小教室單字")
@@ -44,7 +50,8 @@ def get_system_prompt():
 2. 每個主要段落大標（如「產品與服務」、「核心競爭優勢」、「面臨挑戰」、「從中歸納」或其它分析大標）必須使用粗體語法加粗標記（例如 `**核心競爭優勢**`、`**面臨挑戰**`）。
 3. 每個點條列式整理 2~4 個重點摘要 (建議以 `- ` 或 `· ` 開頭)
 4. 去除重複、雜訊或無意義字元
-5. 結尾附上幾個hashtag"""
+5. 結尾附上幾個hashtag
+6. 商業故事主文 (story 欄位) 必須包含完整分析段落（產品與服務、核心競爭優勢、面臨挑戰、從中歸納），內文絕對不可只有公司名稱或標題，字數至少 350 字以上。"""
 
     template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '統整格式模板.md')
     if os.path.exists(template_path):
@@ -217,6 +224,68 @@ def regenerate_field_with_llm(field_type, rejected_words, story):
         
     except Exception as e:
         logger.error(f"呼叫 Gemini 重新生成 {field_type} 失敗: {e}")
+        return None
+
+class StoryOnlySchema(BaseModel):
+    story: str = Field(
+        description=(
+            "完整的商業故事分析主文。必須包含：核心標題、公司沿革、**產品與服務**、"
+            "**核心競爭優勢**、**面臨挑戰**、**從中歸納**及結尾 hashtags。字數須達 400~800 字。"
+        )
+    )
+
+def regenerate_story_with_llm(company_data, metrics, correction_prompt=""):
+    """
+    當初次產生的故事未達標準（例如過短、缺少核心段落），專門呼叫此函式進行單獨修復補正。
+    """
+    if not GEMINI_API_KEY:
+        logger.error("未設定 GEMINI_API_KEY，無法重新生成商業故事")
+        return None
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        comp_name = company_data.get('name', '該公司')
+        stock_id = company_data.get('stock_id', '')
+        industry = company_data.get('industry', '該產業')
+
+        system_prompt = (
+            "你是一位頂級商業分析師與專欄作家。你必須為這家公司撰寫一篇深度、專業且結構分明的商業故事。\n"
+            "請嚴格遵照以下段落架構排版，每一段落必須充實具體（條列 2~4 點）：\n"
+            "1. 【核心標題】(例如【...】)\n"
+            "2. 公司沿革與背景簡介\n"
+            "3. **產品與服務** (條列 2~4 個重點)\n"
+            "4. **核心競爭優勢** (條列 2~4 個重點)\n"
+            "5. **面臨挑戰** (條列 2~4 個重點)\n"
+            "6. **從中歸納** (條列 2~4 個重點)\n"
+            "7. **#Hashtags**\n"
+            "嚴禁僅輸出標題或短句！內文字數必須在 400~800 字之間。"
+        )
+
+        user_content = f"公司：{comp_name} ({stock_id}) - {industry}\n\n"
+        user_content += f"【搜尋到的情報】\n"
+        user_content += f"- 護城河/競爭優勢：\n{metrics.get('moat', '無資料')}\n\n"
+        user_content += f"- 創業故事/背景：\n{metrics.get('story', '無資料')}\n\n"
+        user_content += f"- 產品/解決方案：\n{metrics.get('products', '無資料')}\n\n"
+        user_content += f"- 深耕領域/發展方向：\n{metrics.get('fields', '無資料')}\n\n"
+        user_content += f"- 面臨挑戰/風險：\n{metrics.get('challenges', '無資料')}\n\n"
+        if correction_prompt:
+            user_content += f"【補正要求】：{correction_prompt}\n"
+
+        full_prompt = f"{system_prompt}\n\n{user_content}"
+        logger.info(f"正在呼叫 Gemini 重新生成 {comp_name} 的完整商業故事...")
+
+        response = _call_gemini_with_retry(
+            client=client,
+            full_prompt=full_prompt,
+            response_schema=StoryOnlySchema,
+            temperature=0.7
+        )
+
+        report: StoryOnlySchema = response.parsed
+        return report.story
+
+    except Exception as e:
+        logger.error(f"重新生成商業故事失敗: {e}")
         return None
 
 class TagSchema(BaseModel):
