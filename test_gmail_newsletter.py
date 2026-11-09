@@ -17,9 +17,11 @@ from modules.gmail_sender import (
     build_email_plaintext,
     send_newsletter,
     get_taiwan_date_str,
+    _assemble_mime_message,
     SCOPES
 )
 from modules.formatter import is_valid_business_story
+from modules.image_helper import resolve_local_image, detect_image_mime
 
 class TestGmailNewsletter(unittest.TestCase):
 
@@ -290,6 +292,113 @@ class TestGmailNewsletter(unittest.TestCase):
         text = build_email_plaintext(story_data, self.sample_news_data, issue_number=53, story_number=69)
         self.assertIn("竹陞科技股份有限公司", text)
         self.assertIn("深耕其專業領域與技術創新", text)
+
+    def test_resolve_local_images(self):
+        """驗證本機英語字典圖 (dictionary_Photo.webp) 與德文字典圖 (German-Dictionary) 能被精準讀取與類型識別"""
+        # 1. 英語字典圖
+        vocab_img = resolve_local_image("dictionary_Photo")
+        self.assertIsNotNone(vocab_img)
+        self.assertEqual(vocab_img["mime_type"], "image/webp")
+        self.assertGreater(len(vocab_img["bytes"]), 1000)
+
+        # 2. 德文字典圖 (無副檔名，透過 Magic Bytes 自動探測為 WebP)
+        german_img = resolve_local_image("German-Dictionary")
+        self.assertIsNotNone(german_img)
+        self.assertEqual(german_img["mime_type"], "image/webp")
+        self.assertGreater(len(german_img["bytes"]), 1000)
+
+    def test_build_email_html_with_images_and_proverb_exclusion(self):
+        """驗證商業故事、商務英語、德語小教室附有照片 CID，且商業諺語區絕對不含照片"""
+        mock_images = {
+            "company_photo": {"bytes": b"fake_company", "mime_type": "image/jpeg", "filename": "company.jpg"},
+            "vocab_photo": {"bytes": b"fake_vocab", "mime_type": "image/webp", "filename": "vocab.webp"},
+            "german_photo": {"bytes": b"fake_german", "mime_type": "image/webp", "filename": "german.webp"}
+        }
+        html = build_email_html(
+            self.sample_story_data,
+            self.sample_news_data,
+            issue_number=47,
+            story_number=63,
+            images=mock_images
+        )
+        # 商業故事包含公司照片 CID
+        self.assertIn('src="cid:company_photo"', html)
+        self.assertIn('class="story-photo-img"', html)
+
+        # 英語商務單字包含單字圖 CID
+        self.assertIn('src="cid:vocab_photo"', html)
+
+        # 德語小教室包含德語圖 CID
+        self.assertIn('src="cid:german_photo"', html)
+
+        # 驗證【今日商業／處世諺語】區塊絕對不包含任何 <img> 標籤或 cid:
+        proverb_start = html.find("【今日商業／處世諺語】")
+        german_start = html.find("【德語小教室】")
+        self.assertGreater(proverb_start, -1)
+        self.assertGreater(german_start, proverb_start)
+        proverb_section = html[proverb_start:german_start]
+        self.assertNotIn("<img", proverb_section)
+        self.assertNotIn("cid:", proverb_section)
+
+    def test_build_email_html_without_images_clean_fallback(self):
+        """驗證當圖片為 None 或空字典時，HTML 乾淨無殘留破圖標籤"""
+        html = build_email_html(
+            self.sample_story_data,
+            self.sample_news_data,
+            issue_number=47,
+            story_number=63,
+            images=None
+        )
+        self.assertNotIn("cid:company_photo", html)
+        self.assertNotIn("cid:vocab_photo", html)
+        self.assertNotIn("cid:german_photo", html)
+        self.assertNotIn("<img", html.split("每日重大新聞快訊 Top 3")[1])
+
+    def test_mime_structure_and_cid_attachments(self):
+        """驗證 _assemble_mime_message 符合 RFC 2387 multipart/related 且包含 CID 附件"""
+        fake_images = {
+            "company_photo": {"bytes": b"RIFFfakecompanyWEBP", "mime_type": "image/webp", "filename": "company.webp"},
+            "vocab_photo": {"bytes": b"RIFFfakevocabWEBP", "mime_type": "image/webp", "filename": "dictionary_Photo.webp"},
+            "german_photo": {"bytes": b"RIFFfakegermanWEBP", "mime_type": "image/webp", "filename": "German-Dictionary.webp"}
+        }
+        msg = _assemble_mime_message(
+            subject="【每日時務商報#47】",
+            html_body="<p>Test</p>",
+            plain_body="Test",
+            to_email="test@example.com",
+            images=fake_images
+        )
+        self.assertEqual(msg.get_content_type(), "multipart/related")
+
+        # 檢查裝載的子部件
+        payloads = msg.get_payload()
+        # 第一個子部件應為 multipart/alternative
+        self.assertEqual(payloads[0].get_content_type(), "multipart/alternative")
+
+        # 尋找附加的 Content-ID
+        cids = [part.get("Content-ID") for part in payloads[1:]]
+        self.assertIn("<company_photo>", cids)
+        self.assertIn("<vocab_photo>", cids)
+        self.assertIn("<german_photo>", cids)
+
+    @patch('modules.gmail_sender.create_gmail_draft')
+    @patch('modules.gmail_sender.get_newsletter_images')
+    def test_send_newsletter_auto_attaches_images(self, mock_get_images, mock_create_draft):
+        """驗證 send_newsletter 自動調用 get_newsletter_images 並傳遞至草稿"""
+        mock_get_images.return_value = {
+            "company_photo": {"bytes": b"comp", "mime_type": "image/jpeg", "filename": "comp.jpg"},
+            "vocab_photo": {"bytes": b"vocab", "mime_type": "image/webp", "filename": "vocab.webp"},
+            "german_photo": {"bytes": b"ger", "mime_type": "image/webp", "filename": "ger.webp"}
+        }
+        mock_create_draft.return_value = True
+
+        res = send_newsletter(self.sample_story_data, self.sample_news_data, issue_number=47, story_number=63)
+        self.assertTrue(res["success"])
+        mock_get_images.assert_called_once_with(self.sample_story_data)
+        mock_create_draft.assert_called_once()
+        _, kwargs = mock_create_draft.call_args
+        self.assertIsNotNone(kwargs.get("images"))
+        self.assertIn("company_photo", kwargs["images"])
 
 if __name__ == "__main__":
     unittest.main()

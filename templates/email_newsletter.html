@@ -129,6 +129,32 @@
       margin-bottom: 16px;
       display: inline-block;
     }
+    .story-photo-box {
+      text-align: center;
+      margin: 12px auto 18px;
+    }
+    .story-photo-img {
+      max-width: 100%;
+      width: 480px;
+      height: auto;
+      border-radius: 6px;
+      border: 1px solid #eaeaea;
+      display: block;
+      margin: 0 auto;
+    }
+    .academic-photo-box {
+      text-align: center;
+      margin: 10px auto 14px;
+    }
+    .academic-photo-img {
+      max-width: 100%;
+      width: 260px;
+      height: auto;
+      border-radius: 6px;
+      border: 1px solid #eaeaea;
+      display: block;
+      margin: 0 auto;
+    }
     .story-content {
       font-size: 14.5px;
       line-height: 1.85;
@@ -235,6 +261,7 @@
       <!-- ===== 商業故事 ===== -->
       <div class="story-container">
         <div class="story-title">商業故事#{{ story_number }}：{{ company_name }}</div>
+        {{ company_photo_html }}
         <div class="story-content">
           {{ story_html }}
         </div>
@@ -245,6 +272,7 @@
       <!-- ===== 今日商務單字 ===== -->
       <div class="academic-section">
         <div class="academic-header">【今日商務單字】</div>
+        {{ vocab_photo_html }}
         <div class="academic-word">
           <i>{{ vocab_word }}</i> ({{ vocab_pos }}) // {{ vocab_pron }} //
         </div>
@@ -274,6 +302,7 @@
       <!-- ===== 德語小教室 ===== -->
       <div class="academic-section">
         <div class="academic-header-dark">【德語小教室】</div>
+        {{ german_photo_html }}
         <div class="academic-word">
           <i>{{ german_word }}</i> ({{ german_pos }}) / {{ german_pron }} /
         </div>

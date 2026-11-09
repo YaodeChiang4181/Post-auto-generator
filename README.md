@@ -58,6 +58,21 @@
 - `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **【每日時務商報】三大專屬區塊多媒體圖片內嵌架構 (RFC 2387 MIME CID Multi-Image Integration)**:
+  * **商業故事公司照片動態檢索與平滑備援 (Dynamic Company Photo Sourcing & Fallback)**：
+    * 新增 `modules/image_helper.py` 圖片管理模組，提供 `fetch_company_photo(company_name, stock_id)` 函式。
+    * 整合 Tavily Search API (`include_images=True`) 與維基百科 (Wikipedia Pageimages API) 雙層自動檢索，動態下載台灣上市櫃公司之總部大樓、廠房或 Logo 代表照片。
+    * 具備 5 秒超時與安全大小檢驗防線；若外部查無合適照片或網路逾時，自動啟動平滑降級（不生成圖片標籤），維持原有極簡人文純文字排版，絕無破圖或空框。
+  * **英語商務單字與德語小教室專屬圖卡整合 (Business Vocab & German Dictionary Image Cards)**：
+    * 實作 `resolve_local_image()` 智慧資產解析器，精確解析本機 `dictionary_Photo.webp`（英語區）與無副檔名 `German-Dictionary`（德語區）。
+    * 導入二進位 Magic Bytes 自動探測機制（辨識 `RIFF...WEBP`、`PNG`、`JPEG` 等二進位標頭），同時相容單一圖檔與未來擴充之多圖子資料夾模式。
+    * **嚴格排除商業／處世諺語區塊**：依指示維持諺語純文字哲學排版，絕不混入圖片標籤。
+  * **RFC 2387 MIME CID 內嵌技術架構 (MIME Multipart/Related Engine)**：
+    * 徹底解決 Gmail Web 與手機 App 主動過濾 Base64 (`data:image`) 造成 100% 破圖、以及外鏈圖片遭 Gmail 預設封鎖阻擋之痛點。
+    * 重構 `modules/gmail_sender.py` 之郵件協議為標準 `multipart/related` 階層，內嵌 `multipart/alternative`（Plaintext + HTML），並以 Content-ID（`<company_photo>`、`<vocab_photo>`、`<german_photo>`）掛載內聯 `MIMEImage` 附件。
+    * 升級 `templates/email_newsletter.html` 版面，打造居中卡片展示風格（自適應寬度、圓角 6px、精緻淺灰邊框），各大郵件客戶端原生信任並直接原貌呈現。
+  * **全量單元與整合測試驗證通過**：
+    * 於 `test_gmail_newsletter.py` 新增本機圖檔二進位解析、CID 郵件階層組裝、諺語區隔離檢驗與無圖備援防呆等單元測試，專案全數單元測試 100% 綠燈通過。
 * **【商業故事品質與防空白三層防護體系】Schema嚴格約束、故事驗收重試迴圈與郵件備援防呆 (Three-Tier Defense Against Empty Business Story)**:
   * **第一層：Schema 結構約束與 System Prompt 強化 (Tier 1: Schema & Prompt Hardening)**：
     * 升級 `modules/llm_api.py` 中的 `DailyReportSchema`，將 `story` 欄位明確定義為「完整的商業故事分析主文，必須包含核心標題、公司沿革、產品與服務、核心競爭優勢、面臨挑戰、從中歸納及結尾 hashtags，字數 400~800 字，嚴禁僅輸出公司名稱或空白」。

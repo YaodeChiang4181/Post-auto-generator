@@ -2,9 +2,11 @@ import os
 import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 from datetime import datetime, timezone, timedelta
 import re
 from logger import get_logger
+from modules.image_helper import get_newsletter_images
 
 logger = get_logger(__name__)
 
@@ -121,7 +123,7 @@ def _get_gmail_service():
     return service
 
 
-def build_email_html(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, subject: str = None) -> str:
+def build_email_html(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, subject: str = None, images: dict = None) -> str:
     """
     組合【每日時務商報】極簡人文風 HTML 電子報內容 (無 Emoji、無 AI 產出感)。
     優先使用 templates/email_newsletter.html 模板。
@@ -255,6 +257,34 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
     proverb_exp = proverb.get("explanation", "").replace("\n", "<br>")
     proverb_usage = proverb.get("usage", "").replace("\n", "<br>")
 
+    # 組合圖片 HTML (若提供圖片則產生 CID 參照，否則保持為空不留破圖標籤)
+    company_photo_html = ""
+    vocab_photo_html = ""
+    german_photo_html = ""
+
+    if images:
+        if images.get("company_photo"):
+            company_photo_html = (
+                f'<div class="story-photo-box" style="text-align:center;margin:12px auto 18px;">'
+                f'<img src="cid:company_photo" alt="{company_name}" class="story-photo-img" '
+                f'style="max-width:100%;width:480px;height:auto;border-radius:6px;border:1px solid #eaeaea;display:block;margin:0 auto;">'
+                f'</div>'
+            )
+        if images.get("vocab_photo"):
+            vocab_photo_html = (
+                '<div class="academic-photo-box" style="text-align:center;margin:10px auto 14px;">'
+                '<img src="cid:vocab_photo" alt="今日商務單字" class="academic-photo-img" '
+                'style="max-width:100%;width:260px;height:auto;border-radius:6px;border:1px solid #eaeaea;display:block;margin:0 auto;">'
+                '</div>'
+            )
+        if images.get("german_photo"):
+            german_photo_html = (
+                '<div class="academic-photo-box" style="text-align:center;margin:10px auto 14px;">'
+                '<img src="cid:german_photo" alt="德語小教室" class="academic-photo-img" '
+                'style="max-width:100%;width:260px;height:auto;border-radius:6px;border:1px solid #eaeaea;display:block;margin:0 auto;">'
+                '</div>'
+            )
+
     # 讀取獨立模板
     if os.path.exists(TEMPLATE_FILE):
         try:
@@ -268,7 +298,9 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
                 "{{ date }}": today_str,
                 "{{ news_items_html }}": news_items_html,
                 "{{ company_name }}": company_name,
+                "{{ company_photo_html }}": company_photo_html,
                 "{{ story_html }}": story_html,
+                "{{ vocab_photo_html }}": vocab_photo_html,
                 "{{ vocab_word }}": vocab_word,
                 "{{ vocab_pos }}": vocab_pos,
                 "{{ vocab_pron }}": vocab_pron,
@@ -277,6 +309,7 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
                 "{{ proverb_text }}": proverb_text,
                 "{{ proverb_exp }}": proverb_exp,
                 "{{ proverb_usage }}": proverb_usage,
+                "{{ german_photo_html }}": german_photo_html,
                 "{{ german_word }}": german_word,
                 "{{ german_pos }}": german_pos,
                 "{{ german_pron }}": german_pron,
@@ -302,10 +335,12 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
       <div style="text-align:center;margin-bottom:16px;">
         <span style="font-size:17px;font-weight:bold;color:#ff9900;">商業故事#{story_num}：{company_name}</span>
       </div>
+      {company_photo_html}
       {story_html}
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
       <div style="text-align:center;">
         <div style="font-weight:bold;color:#ff9900;margin-bottom:8px;">【今日商務單字】</div>
+        {vocab_photo_html}
         <p><b><i>{vocab_word}</i></b> ({vocab_pos}) // {vocab_pron} //</p>
         <p style="color:rgb(37,110,225);">{vocab_def}</p>
         <p><b>【例句】</b><br><i>{vocab_ex}</i></p>
@@ -320,6 +355,7 @@ def build_email_html(story_data: dict, news_data: dict, issue_number: int = None
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
       <div style="text-align:center;">
         <div style="font-weight:bold;margin-bottom:8px;">【德語小教室】</div>
+        {german_photo_html}
         <p><b><i>{german_word}</i></b> ({german_pos}) / {german_pron} /</p>
         <p style="color:rgb(37,110,225);">{german_def}</p>
         <p><b>【例句】</b><br><i>{german_ex}</i></p>
@@ -422,9 +458,50 @@ def _get_sender_email(service) -> str:
         return 'me'
 
 
-def send_email_message(subject: str, html_body: str, to_email: str = None, bcc_emails: list = None, plain_body: str = None) -> bool:
+def _assemble_mime_message(subject: str, html_body: str, plain_body: str = None, to_email: str = None, bcc_emails: list = None, from_email: str = 'me', images: dict = None) -> MIMEMultipart:
     """
-    透過 Gmail API 直接發送一封電子郵件 (支援 HTML 與 Plain Text 雙相容)。
+    組裝符合 RFC 2387 標準的 MIMEMultipart('related') 郵件結構，
+    內層裝載 MIMEMultipart('alternative')，並掛載 CID 圖片。
+    """
+    msg_root = MIMEMultipart('related')
+    msg_root['Subject'] = subject
+    msg_root['From'] = from_email
+    if to_email:
+        msg_root['To'] = to_email
+    if bcc_emails:
+        msg_root['Bcc'] = ", ".join(bcc_emails)
+
+    msg_alt = MIMEMultipart('alternative')
+    msg_root.attach(msg_alt)
+
+    if plain_body:
+        msg_alt.attach(MIMEText(plain_body, 'plain', 'utf-8'))
+    msg_alt.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+    if images:
+        for cid_name, img_data in images.items():
+            if not img_data or not isinstance(img_data, dict):
+                continue
+            raw_bytes = img_data.get("bytes")
+            if not raw_bytes:
+                continue
+            mime_type = img_data.get("mime_type", "image/jpeg")
+            subtype = mime_type.split("/")[-1] if "/" in mime_type else "jpeg"
+            try:
+                img_part = MIMEImage(raw_bytes, _subtype=subtype)
+                img_part.add_header('Content-ID', f'<{cid_name}>')
+                filename = img_data.get("filename", f"{cid_name}.{subtype}")
+                img_part.add_header('Content-Disposition', 'inline', filename=filename)
+                msg_root.attach(img_part)
+            except Exception as img_err:
+                logger.warning(f"附加 CID 圖片失敗 ({cid_name}): {img_err}")
+
+    return msg_root
+
+
+def send_email_message(subject: str, html_body: str, to_email: str = None, bcc_emails: list = None, plain_body: str = None, images: dict = None) -> bool:
+    """
+    透過 Gmail API 直接發送一封電子郵件 (支援 HTML、Plain Text 與 CID 內嵌圖片)。
     """
     service = _get_gmail_service()
     if not service:
@@ -432,27 +509,17 @@ def send_email_message(subject: str, html_body: str, to_email: str = None, bcc_e
         return False
 
     try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-
-        # 使用標準 RFC 5322 格式寄件者標頭 (符合 SPF/DKIM/DMARC 規範，大幅降低被分類為垃圾信之機率)
         sender_email = _get_sender_email(service)
-        if sender_email and sender_email != 'me':
-            msg['From'] = f"每日時務商報 <{sender_email}>"
-        else:
-            msg['From'] = 'me'
-
-        if to_email:
-            msg['To'] = to_email
-        if bcc_emails:
-            msg['Bcc'] = ", ".join(bcc_emails)
-
-        # 附加純文字降級版本
-        if plain_body:
-            msg.attach(MIMEText(plain_body, 'plain', 'utf-8'))
-
-        # 附加 HTML 富文字內容
-        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+        from_header = f"每日時務商報 <{sender_email}>" if (sender_email and sender_email != 'me') else 'me'
+        msg = _assemble_mime_message(
+            subject=subject,
+            html_body=html_body,
+            plain_body=plain_body,
+            to_email=to_email,
+            bcc_emails=bcc_emails,
+            from_email=from_header,
+            images=images
+        )
 
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
         send_body = {'raw': raw}
@@ -464,22 +531,22 @@ def send_email_message(subject: str, html_body: str, to_email: str = None, bcc_e
         return False
 
 
-def create_gmail_draft(subject: str, html_body: str, plain_body: str = None) -> bool:
+def create_gmail_draft(subject: str, html_body: str, plain_body: str = None, images: dict = None) -> bool:
     """
-    在 Gmail 中建立一封 HTML 格式草稿 (安全備援)。
+    在 Gmail 中建立一封 HTML 格式草稿 (支援 CID 內嵌圖片，安全備援)。
     """
     service = _get_gmail_service()
     if not service:
         return False
 
     try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = 'me'
-
-        if plain_body:
-            msg.attach(MIMEText(plain_body, 'plain', 'utf-8'))
-        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+        msg = _assemble_mime_message(
+            subject=subject,
+            html_body=html_body,
+            plain_body=plain_body,
+            from_email='me',
+            images=images
+        )
 
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
         draft_body = {'message': {'raw': raw}}
@@ -493,7 +560,7 @@ def create_gmail_draft(subject: str, html_body: str, plain_body: str = None) -> 
         return False
 
 
-def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None) -> dict:
+def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, images: dict = None) -> dict:
     """
     【每日時務商報】整合發信入口：
     依據環境變數 (EMAIL_AUTO_SEND) 與收件人清單自動判定直接發送或建立草稿。
@@ -522,7 +589,15 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None,
 
     subject = f"【每日時務商報#{issue_number}】－每日快訊與成長"
 
-    html_body = build_email_html(story_data, news_data, issue_number, story_number, subject)
+    # 載入電子報所需圖片 (商業故事公司圖、英語字典圖、德語字典圖，不含諺語)
+    if images is None:
+        try:
+            images = get_newsletter_images(story_data)
+        except Exception as img_load_err:
+            logger.warning(f"加載電子報圖片失敗，平滑降級為純文字排版: {img_load_err}")
+            images = {}
+
+    html_body = build_email_html(story_data, news_data, issue_number, story_number, subject, images=images)
     plain_body = build_email_plaintext(story_data, news_data, issue_number, story_number, subject)
 
     auto_send = os.getenv("EMAIL_AUTO_SEND", "false").strip().strip("'\"").lower() in ("true", "1", "yes")
@@ -544,13 +619,13 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None,
 
         if send_mode == "bcc":
             # 模式 1: 單封信件透過 Bcc 群發
-            ok = send_email_message(subject, html_body, to_email="me", bcc_emails=recipients, plain_body=plain_body)
+            ok = send_email_message(subject, html_body, to_email="me", bcc_emails=recipients, plain_body=plain_body, images=images)
             if ok:
                 sent_count = len(recipients)
         else:
             # 模式 2: 逐封獨立寄送 (避免 Bcc 判定為垃圾信，每位讀者收到的 To 都是自己)
             for to in recipients:
-                if send_email_message(subject, html_body, to_email=to, plain_body=plain_body):
+                if send_email_message(subject, html_body, to_email=to, plain_body=plain_body, images=images):
                     sent_count += 1
 
         if sent_count > 0:
@@ -564,7 +639,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None,
             }
         else:
             logger.warning("自動發信失敗，立即安全降級為建立 Gmail 草稿...")
-            draft_ok = create_gmail_draft(subject, html_body, plain_body)
+            draft_ok = create_gmail_draft(subject, html_body, plain_body, images=images)
             return {
                 "mode": "draft_fallback",
                 "success": draft_ok,
@@ -575,7 +650,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None,
 
     # 未開啟自動發信或無收件人名單 -> 建立草稿 (既有安全模式)
     logger.info(f"未開啟 EMAIL_AUTO_SEND 或無收件人名單，建立 Gmail 草稿: {subject}")
-    draft_ok = create_gmail_draft(subject, html_body, plain_body)
+    draft_ok = create_gmail_draft(subject, html_body, plain_body, images=images)
     return {
         "mode": "draft",
         "success": draft_ok,
@@ -585,7 +660,7 @@ def send_newsletter(story_data: dict, news_data: dict, issue_number: int = None,
     }
 
 
-def send_newsletter_as_draft(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None) -> bool:
+def send_newsletter_as_draft(story_data: dict, news_data: dict, issue_number: int = None, story_number: int = None, images: dict = None) -> bool:
     """向後相容輔助函式"""
-    res = send_newsletter(story_data, news_data, issue_number, story_number)
+    res = send_newsletter(story_data, news_data, issue_number, story_number, images=images)
     return res.get("success", False)
