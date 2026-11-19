@@ -1,12 +1,10 @@
 from google import genai
+from google.genai import types
 from config import GEMINI_API_KEY
 from logger import get_logger
 import os
 import json
 from pydantic import BaseModel, Field
-
-import time
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = get_logger(__name__)
 
@@ -66,16 +64,32 @@ def get_system_prompt():
             
     return base_prompt
 
-@retry(
-    stop=stop_after_attempt(6),
-    wait=wait_exponential(multiplier=2, min=4, max=60),
-    reraise=True
-)
+GEMINI_REQUEST_TIMEOUT_MS = 60_000
+GEMINI_MODEL_ATTEMPTS = 3
+
+
+def _create_gemini_client():
+    """Build a client with a request timeout and no hidden SDK retries."""
+    return genai.Client(
+        api_key=GEMINI_API_KEY,
+        http_options=types.HttpOptions(
+            timeout=GEMINI_REQUEST_TIMEOUT_MS,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
+
+
+def _get_http_status(error):
+    """Return the HTTP status carried by a Google API error, if available."""
+    status = getattr(error, "code", None) or getattr(error, "status_code", None)
+    try:
+        return int(status)
+    except (TypeError, ValueError):
+        return None
+
+
 def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
-    """
-    實際呼叫 API 的內部函數，若發生暫時性錯誤會自動重試。
-    並加入「退而求其次」的模型累退嘗試邏輯。
-    """
+    """Try a bounded list of Gemini models; each request has a timeout."""
     models_to_try = [
         "gemini-3.7-flash",  # 最新一代穩定模型，先嘗試
         "gemini-3.8-flash",  # 較新模型，作為第一備用
@@ -87,10 +101,15 @@ def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
     
     last_exception = None
     
-    for model_name in models_to_try:
+    for model_name in models_to_try[:GEMINI_MODEL_ATTEMPTS]:
         try:
             # 這裡加上 logging 可能會需要 import logger，但模組層級已經有 logger 了
-            logger.info(f"嘗試使用模型: {model_name}")
+            attempt_number = models_to_try.index(model_name) + 1
+            logger.info(
+                f"Trying Gemini model {model_name} "
+                f"(attempt {attempt_number}/{len(models_to_try[:GEMINI_MODEL_ATTEMPTS])}, "
+                f"timeout={GEMINI_REQUEST_TIMEOUT_MS // 1000}s)"
+            )
             response = client.models.generate_content(
                 model=model_name,
                 contents=full_prompt,
@@ -102,12 +121,18 @@ def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
             )
             return response
         except Exception as e:
-            logger.warning(f"使用模型 {model_name} 失敗: {e}")
             last_exception = e
+            status = _get_http_status(e)
+            logger.warning(
+                f"Gemini model {model_name} failed "
+                f"(attempt {models_to_try.index(model_name) + 1}, HTTP {status or 'unknown'}): {e}"
+            )
+            if status not in (None, 404, 408, 429, 500, 502, 503, 504):
+                break
             continue  # 失敗則繼續嘗試下一個模型
             
     # 若所有模型皆失敗，拋出最後一個例外，讓 tenacity 進行指數退避重試
-    logger.error("所有備選模型皆嘗試失敗，準備進入重試機制等待...")
+    logger.error("All configured Gemini model attempts failed.")
     raise last_exception
 
 def summarize_with_llm(company_data, metrics, recent_history=None):
@@ -120,7 +145,7 @@ def summarize_with_llm(company_data, metrics, recent_history=None):
 
     try:
         # Initialize Gemini SDK client
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _create_gemini_client()
         
         comp_name = company_data.get('name', '未知公司')
         stock_id = company_data.get('stock_id', '未知代碼')
@@ -182,7 +207,7 @@ def regenerate_field_with_llm(field_type, rejected_words, story):
         return None
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _create_gemini_client()
         
         system_prompt = (
             "你是一位專業的資訊整理助理。請根據以下已經寫好的「商業故事」，"
@@ -243,7 +268,7 @@ def regenerate_story_with_llm(company_data, metrics, correction_prompt=""):
         return None
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _create_gemini_client()
         comp_name = company_data.get('name', '該公司')
         stock_id = company_data.get('stock_id', '')
         industry = company_data.get('industry', '該產業')
@@ -316,7 +341,7 @@ def select_top_news_with_llm(candidates, recent_titles=None):
         return None
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _create_gemini_client()
         
         system_prompt = (
             "你是一名兼具總體經濟與產業投資視野的「資深商業分析師與晨報主編」。\n"
@@ -401,7 +426,7 @@ def generate_tag_explanation(tag_name):
         return None
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _create_gemini_client()
         
         system_prompt = (
             "你是一位頂尖的科技商業分析師，擅長用極簡、白話的方式將硬核名詞解釋給非技術背景的投資人聽。\n"
@@ -440,7 +465,7 @@ def generate_tag_explanations_batch(tag_names):
         return []
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _create_gemini_client()
         
         system_prompt = (
             "你是一位頂尖的科技商業分析師，擅長用極簡、白話的方式將硬核名詞解釋給非技術背景的投資人聽。\n"
@@ -484,7 +509,7 @@ def generate_finance_term(news_context, target_term="", recent_history=None, rej
         return None
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _create_gemini_client()
         
         system_prompt = (
             "你是一位資深財經新聞主編與金融行銷專家。你的任務是為每日財經電子報撰寫一檔「今日金融名詞拆解」專欄。\n"

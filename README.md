@@ -58,6 +58,7 @@
 - `EMAIL_SEND_MODE`: (可選) 發信模式，`individual`（預設，逐封寄送保障隱私且不易入促銷匣）或 `bcc`（密件副本群發）。
 
 ## 更新日誌 (Changelog)
+* **Gemini 呼叫逾時與重試上限**：為每次 Gemini 請求設定 60 秒逾時、停用 SDK 內部重試，最多切換 3 個模型；憑證或請求格式等非暫時性 HTTP 錯誤會立即停止，避免工作流程無限等待。固定 `google-genai` 至 2.33.0，讓雲端執行環境可重現。
 * **【每日時務商報】三大專屬區塊多媒體圖片內嵌架構 (RFC 2387 MIME CID Multi-Image Integration)**:
   * **商業故事公司照片動態檢索與平滑備援 (Dynamic Company Photo Sourcing & Fallback)**：
     * 新增 `modules/image_helper.py` 圖片管理模組，提供 `fetch_company_photo(company_name, stock_id)` 函式。
