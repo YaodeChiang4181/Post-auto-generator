@@ -216,3 +216,4 @@ def get_newsletter_images(story_data: dict) -> dict:
         "german_photo": resolve_local_image("German-Dictionary")
     }
     return images
+
