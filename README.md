@@ -168,3 +168,9 @@
 * **內容品質與 Token 最佳化 (Deduplication & Context Optimization)**:
   * **歷史新聞查重與後續報導識別**: 在挑選 Top 3 新聞前，系統會自動預載過去 48 小時的歷史新聞標題。LLM 具備自動判斷能力，能將「純粹因新聞台較晚發布的重複內容」權重降為零直接淘汰，而若是「同一事件但具備新人物發言或後續新進展」的報導則保留權重。
   * **單字防呆與後驗證機制 (Post-validation)**: 為了解決商業單字重複問題，並避免原本塞入全量歷史單字導致的 Prompt 過長問題，導入了精準後驗證機制。現在主 Prompt 僅提供最近 5 筆單字減輕 AI 負擔，待產出結果後由後端程式即時比對資料庫 (`ILIKE` 精確比對)。若不幸發生單字、諺語或德文重複，系統會觸發一次輕量級的重試 API 單獨替換該欄位，確保內容百分之百全新。
+
+## Automation resilience update (2026-11-19)
+
+- Gemini requests use bounded timeouts and short backoff between a limited set of model attempts. When configured, Groq (`openai/gpt-oss-120b`) is used as a structured-output fallback.
+- If business-story generation still fails, the run stores the company and fetched metrics in PostgreSQL. A separate hourly GitHub Actions workflow retries one due job at a time, up to four worker attempts, and sends Telegram status alerts.
+- Add the `GROQ_API_KEY` GitHub Actions secret to enable immediate provider fallback. The retry queue requires the existing `DATABASE_URL`; Telegram alerts require the existing bot token and chat ID.

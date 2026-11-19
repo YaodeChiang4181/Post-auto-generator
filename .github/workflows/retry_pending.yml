@@ -1,0 +1,64 @@
+name: Retry Pending Automation Jobs
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TZ: Asia/Taipei
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Restore Gmail OAuth credentials
+        env:
+          GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS_JSON || secrets.GMAIL_CREDENTIALS }}
+          GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN_JSON || secrets.GMAIL_TOKEN }}
+        if: ${{ env.GMAIL_CREDENTIALS != '' && env.GMAIL_TOKEN != '' }}
+        run: |
+          echo "$GMAIL_CREDENTIALS" > credentials.json
+          echo "$GMAIL_TOKEN" > token.json
+
+      - name: Retry one due automation job
+        env:
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EMAIL_AUTO_SEND: ${{ secrets.EMAIL_AUTO_SEND }}
+          NEWSLETTER_RECIPIENTS: ${{ secrets.NEWSLETTER_RECIPIENTS }}
+          EMAIL_SEND_MODE: ${{ secrets.EMAIL_SEND_MODE }}
+        run: python retry_pending_jobs.py
+
+      - name: Commit and push updated docs and counters
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/ data/counters.json
+          if git diff --staged --quiet; then
+            echo "No static docs or counters changes to commit"
+          else
+            git commit -m "chore(pages): retry job update [skip ci]"
+            git push
+          fi

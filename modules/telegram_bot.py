@@ -34,3 +34,24 @@ def send_to_telegram(message):
             error_msg += f" - Response: {e.response.text}"
         logger.error(error_msg)
         return False
+
+
+def send_automation_alert(message):
+    """Send a concise automation failure/retry notice without implying success."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        logger.error("Telegram credentials are not set; unable to send automation alert.")
+        return False
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": f"⚠️【自動化流程通知】\n\n{message[:3500]}",
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        logger.info("Automation alert sent to Telegram.")
+        return True
+    except requests.RequestException as e:
+        logger.error(f"Failed to send automation alert to Telegram: {e}")
+        return False

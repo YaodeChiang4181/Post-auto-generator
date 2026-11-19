@@ -4,7 +4,7 @@ from modules.gov_api import get_random_company
 from modules.news_api import fetch_all_metrics
 from modules.formatter import format_daily_report
 from modules.llm_api import select_top_news_with_llm, generate_tag_explanation, generate_tag_explanations_batch
-from modules.telegram_bot import send_to_telegram
+from modules.telegram_bot import send_to_telegram, send_automation_alert
 from modules.state_manager import StateManager
 from modules.news_aggregator import get_daily_news_candidates
 from modules.gmail_sender import send_newsletter, send_newsletter_as_draft
@@ -12,25 +12,25 @@ from modules.gmail_sender import send_newsletter, send_newsletter_as_draft
 
 logger = get_logger("main")
 
-def main():
+def main(company_override=None, metrics_override=None, state_manager=None, retry_job_id=None):
     logger.info("=== Starting Content Automation (Targeted Search Mode) ===")
     
     # 0. Init StateManager
-    state_manager = StateManager()
+    state_manager = state_manager or StateManager()
     
     # 1. Get random company from government data
-    company = get_random_company()
+    company = company_override or get_random_company()
     
     if not company:
         logger.error("Failed to get a random company from government open data. Exiting.")
-        sys.exit(1)
+        return False
         
     stock_id = company['stock_id']
     logger.info(f"Selected company: {company['name']} ({stock_id}) - {company['market']}")
     
     # 2. Fetch all targeted metrics concurrently via Tavily
     logger.info("Fetching all 8 metric categories via search...")
-    metrics = fetch_all_metrics(company)
+    metrics = metrics_override if metrics_override is not None else fetch_all_metrics(company)
     
     # 3. Format Data (With LLM JSON output)
     logger.info("Formatting daily report with Vocabulary, Proverb, and German word...")
@@ -38,7 +38,40 @@ def main():
     
     if not post_draft:
         logger.error("Failed to format report. Exiting.")
-        sys.exit(1)
+        failure_reason = "All configured LLM providers failed to generate the business story."
+        try:
+            if retry_job_id:
+                exhausted = state_manager.defer_business_story_retry(retry_job_id, failure_reason)
+                if exhausted:
+                    send_automation_alert(
+                        f"公司 {company.get('name', '')} 的商業故事已重試到上限，仍無法產生。"
+                    )
+                else:
+                    send_automation_alert(
+                        f"公司 {company.get('name', '')} 的重試仍未成功，已排入下一次自動重試。"
+                    )
+            else:
+                queued_id = state_manager.enqueue_business_story_retry(company, metrics, failure_reason)
+                if queued_id:
+                    send_automation_alert(
+                        f"公司 {company.get('name', '')} 的商業故事暫時無法產生。"
+                        f"已保存待重試工作 #{queued_id}，排程會自動再試。"
+                    )
+                else:
+                    send_automation_alert(
+                        f"公司 {company.get('name', '')} 的商業故事暫時無法產生，"
+                        "但待重試工作未能保存，請檢查資料庫連線。"
+                    )
+        except Exception as queue_error:
+            logger.exception(f"Failed to persist the pending story retry: {queue_error}")
+            send_automation_alert(
+                f"公司 {company.get('name', '')} 的商業故事暫時無法產生，"
+                "且待重試工作未能保存，請檢查 GitHub Actions 與資料庫。"
+            )
+        return False
+
+    if retry_job_id:
+        state_manager.complete_business_story_retry(retry_job_id)
         
     # 4. Send to Telegram
     logger.info("Sending Business Story to Telegram...")
@@ -154,9 +187,15 @@ def main():
     if success and news_success:
         state_manager.save_history(vocab_word, proverb_text, german_word)
         logger.info("Workflow completed successfully. History saved.")
+        return True
     else:
         logger.error("Workflow finished with errors (Story or News Telegram failed).")
-        sys.exit(1)
+        send_automation_alert(
+            f"公司 {company.get('name', '')} 的故事已產生，但新聞或 Telegram 步驟未完成；"
+            "請查看 GitHub Actions 執行紀錄。"
+        )
+        return False
 
 if __name__ == "__main__":
-    main()
+    if not main():
+        sys.exit(1)

@@ -5,6 +5,7 @@ import os
 from config import DATABASE_URL, COMPANIES_FILE
 from logger import get_logger
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 COUNTERS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'counters.json')
 
@@ -165,6 +166,19 @@ class StateManager:
                         key TEXT PRIMARY KEY,
                         value INTEGER NOT NULL,
                         updated_at TIMESTAMP
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS pending_automation_jobs (
+                        id BIGSERIAL PRIMARY KEY,
+                        job_key TEXT NOT NULL UNIQUE,
+                        payload JSONB NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        attempt_count INTEGER NOT NULL DEFAULT 0,
+                        next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        last_error TEXT
                     )
                 ''')
             conn.commit()
@@ -521,3 +535,97 @@ class StateManager:
                 for row in rows:
                     titles.append(f"【{row[1]}】{row[0]} (發布時間: {row[2].strftime('%Y-%m-%d %H:%M')})")
                 return titles
+
+    def enqueue_business_story_retry(self, company, metrics, error):
+        """Persist a failed story-generation job for a later scheduled retry."""
+        run_date = datetime.now(ZoneInfo("Asia/Taipei")).date().isoformat()
+        job_key = f"business-story:{run_date}:{company.get('stock_id', 'unknown')}"
+        payload = {"company": company, "metrics": metrics}
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO pending_automation_jobs (job_key, payload, last_error)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (job_key) DO NOTHING
+                    RETURNING id
+                ''', (job_key, psycopg2.extras.Json(payload, dumps=lambda value: json.dumps(value, default=str)), str(error)[:2000]))
+                row = cursor.fetchone()
+                if row:
+                    return row[0]
+                cursor.execute('SELECT id FROM pending_automation_jobs WHERE job_key = %s', (job_key,))
+                existing = cursor.fetchone()
+                return existing[0] if existing else None
+
+    def claim_pending_business_story(self):
+        """Atomically claim the oldest due retry, recovering stale worker locks."""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                cursor.execute('''
+                    UPDATE pending_automation_jobs
+                    SET status = 'pending', next_attempt_at = NOW(), updated_at = NOW()
+                    WHERE status = 'processing'
+                      AND updated_at < NOW() - INTERVAL '30 minutes'
+                ''')
+                cursor.execute('''
+                    SELECT id, payload, attempt_count
+                    FROM pending_automation_jobs
+                    WHERE status = 'pending' AND next_attempt_at <= NOW()
+                    ORDER BY created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                ''')
+                job = cursor.fetchone()
+                if not job:
+                    return None
+                cursor.execute('''
+                    UPDATE pending_automation_jobs
+                    SET status = 'processing', attempt_count = attempt_count + 1, updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING id, payload, attempt_count
+                ''', (job['id'],))
+                return dict(cursor.fetchone())
+
+    def defer_business_story_retry(self, job_id, error, max_attempts=4):
+        """Schedule another retry or mark the job exhausted; return True if exhausted."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('SELECT attempt_count, status FROM pending_automation_jobs WHERE id = %s', (job_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return True
+                attempts = row[0]
+                if row[1] != 'processing':
+                    return row[1] == 'failed'
+                exhausted = attempts >= max_attempts
+                status = 'failed' if exhausted else 'pending'
+                cursor.execute('''
+                    UPDATE pending_automation_jobs
+                    SET status = %s,
+                        next_attempt_at = CASE attempt_count
+                            WHEN 1 THEN NOW() + INTERVAL '30 minutes'
+                            WHEN 2 THEN NOW() + INTERVAL '2 hours'
+                            ELSE NOW() + INTERVAL '6 hours'
+                        END,
+                        updated_at = NOW(),
+                        last_error = %s
+                    WHERE id = %s
+                ''', (status, str(error)[:2000], job_id))
+                return exhausted
+
+    def complete_business_story_retry(self, job_id):
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE pending_automation_jobs
+                    SET status = 'complete', updated_at = NOW(), last_error = NULL
+                    WHERE id = %s
+                ''', (job_id,))
+
+    def fail_business_story_retry(self, job_id, error):
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE pending_automation_jobs
+                    SET status = 'failed', updated_at = NOW(), last_error = %s
+                    WHERE id = %s
+                ''', (str(error)[:2000], job_id))

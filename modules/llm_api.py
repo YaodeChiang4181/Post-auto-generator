@@ -1,9 +1,12 @@
 from google import genai
 from google.genai import types
-from config import GEMINI_API_KEY
+from groq import Groq
+from types import SimpleNamespace
+from config import GEMINI_API_KEY, GROQ_API_KEY
 from logger import get_logger
 import os
 import json
+import time
 from pydantic import BaseModel, Field
 
 logger = get_logger(__name__)
@@ -66,10 +69,15 @@ def get_system_prompt():
 
 GEMINI_REQUEST_TIMEOUT_MS = 60_000
 GEMINI_MODEL_ATTEMPTS = 3
+GEMINI_RETRY_DELAYS_SECONDS = (15, 30)
+GROQ_REQUEST_TIMEOUT_SECONDS = 60
+GROQ_FALLBACK_MODEL = "openai/gpt-oss-120b"
 
 
 def _create_gemini_client():
     """Build a client with a request timeout and no hidden SDK retries."""
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
+        return None
     return genai.Client(
         api_key=GEMINI_API_KEY,
         http_options=types.HttpOptions(
@@ -89,7 +97,7 @@ def _get_http_status(error):
 
 
 def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
-    """Try a bounded list of Gemini models; each request has a timeout."""
+    """Try Gemini with bounded backoff, then fall back to Groq if configured."""
     models_to_try = [
         "gemini-3.7-flash",  # 最新一代穩定模型，先嘗試
         "gemini-3.8-flash",  # 較新模型，作為第一備用
@@ -100,14 +108,16 @@ def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
     ]
     
     last_exception = None
+    if client is not None:
+        configured_models = models_to_try[:GEMINI_MODEL_ATTEMPTS]
+    else:
+        configured_models = []
     
-    for model_name in models_to_try[:GEMINI_MODEL_ATTEMPTS]:
+    for attempt_number, model_name in enumerate(configured_models, start=1):
         try:
-            # 這裡加上 logging 可能會需要 import logger，但模組層級已經有 logger 了
-            attempt_number = models_to_try.index(model_name) + 1
             logger.info(
                 f"Trying Gemini model {model_name} "
-                f"(attempt {attempt_number}/{len(models_to_try[:GEMINI_MODEL_ATTEMPTS])}, "
+                f"(attempt {attempt_number}/{len(configured_models)}, "
                 f"timeout={GEMINI_REQUEST_TIMEOUT_MS // 1000}s)"
             )
             response = client.models.generate_content(
@@ -129,17 +139,68 @@ def _call_gemini_with_retry(client, full_prompt, response_schema, temperature):
             )
             if status not in (None, 404, 408, 429, 500, 502, 503, 504):
                 break
+            if attempt_number < len(configured_models) and status != 404:
+                delay = GEMINI_RETRY_DELAYS_SECONDS[min(attempt_number - 1, len(GEMINI_RETRY_DELAYS_SECONDS) - 1)]
+                logger.info(f"Transient Gemini failure; waiting {delay}s before the next model attempt.")
+                time.sleep(delay)
             continue  # 失敗則繼續嘗試下一個模型
-            
-    # 若所有模型皆失敗，拋出最後一個例外，讓 tenacity 進行指數退避重試
-    logger.error("All configured Gemini model attempts failed.")
-    raise last_exception
+
+    if GROQ_API_KEY:
+        try:
+            logger.warning("Gemini unavailable; switching to the Groq fallback provider.")
+            groq_client = Groq(
+                api_key=GROQ_API_KEY,
+                timeout=GROQ_REQUEST_TIMEOUT_SECONDS,
+                max_retries=0,
+            )
+            schema = response_schema.model_json_schema()
+            _prepare_groq_schema(schema)
+            completion = groq_client.chat.completions.create(
+                model=GROQ_FALLBACK_MODEL,
+                messages=[{"role": "user", "content": full_prompt}],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": response_schema.__name__.lower(),
+                        "strict": True,
+                        "schema": schema,
+                    },
+                },
+                temperature=temperature,
+                max_completion_tokens=8192,
+            )
+            content = completion.choices[0].message.content
+            parsed = response_schema.model_validate_json(content)
+            logger.info(f"Groq fallback succeeded with {GROQ_FALLBACK_MODEL}.")
+            return SimpleNamespace(parsed=parsed)
+        except Exception as e:
+            logger.exception(f"Groq fallback failed: {e}")
+            last_exception = e
+
+    logger.error("All configured LLM providers failed.")
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("No LLM provider is configured.")
+
+
+def _prepare_groq_schema(schema):
+    """Make Pydantic JSON Schema compatible with Groq strict structured output."""
+    if isinstance(schema, dict):
+        if schema.get("type") == "object":
+            properties = schema.get("properties", {})
+            schema["required"] = list(properties)
+            schema["additionalProperties"] = False
+        for value in schema.values():
+            _prepare_groq_schema(value)
+    elif isinstance(schema, list):
+        for value in schema:
+            _prepare_groq_schema(value)
 
 def summarize_with_llm(company_data, metrics, recent_history=None):
     """
     呼叫 Gemini API 將抓取到的公司資訊與 metrics 進行統整，並產出單字與諺語
     """
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
         logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行彙整")
         return None
 
@@ -202,7 +263,7 @@ def regenerate_field_with_llm(field_type, rejected_words, story):
     field_type: 'vocab', 'proverb', 或是 'german'
     rejected_words: 可以是單一字串或字串列表（包含所有被退件的重複詞）
     """
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
         logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行重新生成")
         return None
 
@@ -263,7 +324,7 @@ def regenerate_story_with_llm(company_data, metrics, correction_prompt=""):
     """
     當初次產生的故事未達標準（例如過短、缺少核心段落），專門呼叫此函式進行單獨修復補正。
     """
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
         logger.error("未設定 GEMINI_API_KEY，無法重新生成商業故事")
         return None
 
@@ -332,7 +393,7 @@ def select_top_news_with_llm(candidates, recent_titles=None):
     """
     呼叫 Gemini API 從候選名單中篩選出 Top 3 新聞，並生成短評及翻譯
     """
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
         logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行新聞篩選")
         return None
         
@@ -421,7 +482,7 @@ def generate_tag_explanation(tag_name):
     """
     針對未知的商業/科技名詞生成 150 字內的白話科普與重點整理。
     """
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
         logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行科普生成")
         return None
 
@@ -457,7 +518,7 @@ def generate_tag_explanations_batch(tag_names):
     """
     批次生成多個標籤的科普解釋，以節省 API Quota。
     """
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY and not GROQ_API_KEY:
         logger.error("未設定 GEMINI_API_KEY，無法呼叫 LLM 進行批次科普生成")
         return []
     
